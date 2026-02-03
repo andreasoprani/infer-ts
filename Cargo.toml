@@ -1,0 +1,17 @@
+[package]
+name = "infer-ts"
+version = "0.1.0"
+edition = "2021"
+description = "Infer timestamp formats from string columns using CSP constraint elimination"
+
+[lib]
+name = "infer_ts"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["macros", "abi3", "abi3-py38"] }
+chrono = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true

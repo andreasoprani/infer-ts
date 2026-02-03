@@ -1,0 +1,152 @@
+# infer-ts
+
+Infer timestamp formats from string columns using **CSP constraint elimination**,
+built in Rust via [PyO3](https://pyo3.rs/) for use with Python and
+[Polars](https://pola-rs.github.io/polars/).
+
+## How it works
+
+The inference engine treats each candidate timestamp format as a variable in a
+Constraint Satisfaction Problem (CSP).  Each cell value in the column acts as a
+constraint that narrows the candidate set:
+
+1. **Initialise** – start with all 19 known formats as candidates.
+2. **Propagate** – for each non-null cell, eliminate every format that cannot
+   parse that value.
+3. **Early exit** – as soon as a single format remains, return it immediately.
+4. **Ambiguity** – if multiple formats survive all cells, return an error listing
+   them.
+
+This approach is both efficient (resolves in the first few rows for most real
+data) and accurate (uses the *entire* column, not just the first non-null cell).
+
+## Supported formats
+
+| Family                | Example                              | Polars format string        |
+|-----------------------|--------------------------------------|-----------------------------|
+| ISO 8601 datetime     | `2024-01-15T10:30:00`                | `%Y-%m-%dT%H:%M:%S`         |
+| ISO 8601 + UTC        | `2024-01-15T10:30:00Z`               | `%Y-%m-%dT%H:%M:%SZ`        |
+| ISO 8601 + offset     | `2024-01-15T10:30:00+05:30`          | `%Y-%m-%dT%H:%M:%S%:z`      |
+| ISO 8601 + frac       | `2024-01-15T10:30:00.123456`         | `%Y-%m-%dT%H:%M:%S%.f`      |
+| ISO 8601 + frac + UTC | `2024-01-15T10:30:00.123456Z`        | `%Y-%m-%dT%H:%M:%S%.fZ`     |
+| ISO 8601 + frac + tz  | `2024-01-15T10:30:00.123456+05:30`   | `%Y-%m-%dT%H:%M:%S%.f%:z`   |
+| Space datetime        | `2024-01-15 10:30:00`                | `%Y-%m-%d %H:%M:%S`         |
+| Space datetime + frac | `2024-01-15 10:30:00.123456`         | `%Y-%m-%d %H:%M:%S%.f`      |
+| Date only (ISO)       | `2024-01-15`                         | `%Y-%m-%d`                  |
+| US slash date         | `01/15/2024`                         | `%m/%d/%Y`                  |
+| EU slash date         | `15/01/2024`                         | `%d/%m/%Y`                  |
+| US slash datetime     | `01/15/2024 10:30:00`                | `%m/%d/%Y %H:%M:%S`         |
+| EU slash datetime     | `15/01/2024 10:30:00`                | `%d/%m/%Y %H:%M:%S`         |
+| Compact date          | `20240115`                           | `%Y%m%d`                    |
+| Compact datetime      | `20240115T103000`                    | `%Y%m%dT%H%M%S`             |
+| Unix seconds          | `1705312200`                         | `@unix_seconds`             |
+| Unix milliseconds     | `1705312200000`                      | `@unix_ms`                  |
+| Unix microseconds     | `1705312200000000`                   | `@unix_us`                  |
+| Unix nanoseconds      | `1705312200000000000`                | `@unix_ns`                  |
+
+### Unix epoch digit-count ranges
+
+Unix formats use non-overlapping digit-count windows so the CSP can
+discriminate between units without ambiguity:
+
+| Variant          | Digit count | Approx. date range          |
+|------------------|-------------|-----------------------------|
+| UnixSeconds      | 9–10        | 1973-03-03 … 2286-11-20     |
+| UnixMilliseconds | 11–13       | 1970     … 2286 (ms)        |
+| UnixMicroseconds | 14–16       | 1970     … 2286 (µs)        |
+| UnixNanoseconds  | 17–19       | 1677     … 2262 (ns, i64)   |
+
+Values with 1–8 digits do not match any Unix variant; 8-digit numeric strings
+are handled exclusively by `DateCompact` (if the digits form a valid date).
+
+## Installation
+
+Requires [Rust](https://www.rust-lang.org/) and
+[maturin](https://github.com/PyO3/maturin).
+
+```sh
+pip install maturin
+maturin develop --release
+```
+
+## Usage
+
+### Basic inference
+
+```python
+import infer_ts
+
+fmt = infer_ts.infer_format([
+    "2024-01-15T10:30:00",
+    "2024-06-20T08:00:00",
+    None,                       # nulls are skipped
+])
+print(fmt)  # "%Y-%m-%dT%H:%M:%S"
+```
+
+### Polars – string-based formats
+
+```python
+import polars as pl
+import infer_ts
+
+df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
+
+fmt = infer_ts.infer_format(df["ts"].to_list())
+df = df.with_columns(pl.col("ts").str.to_datetime(format=fmt))
+```
+
+### Polars – Unix epoch formats
+
+`infer_format` returns a `@`-prefixed marker for epoch columns.  These require
+integer casting rather than format-string parsing:
+
+```python
+import polars as pl
+import infer_ts
+
+EPOCH_UNITS = {
+    "@unix_seconds": "us",   # cast seconds → microseconds for Datetime
+    "@unix_ms":      "us",
+    "@unix_us":      "us",
+    "@unix_ns":      "ns",
+}
+
+df = pl.DataFrame({"ts": ["1705312200", "1705398600"]})
+fmt = infer_ts.infer_format(df["ts"].to_list())
+
+if fmt in EPOCH_UNITS:
+    df = df.with_columns(
+        pl.col("ts").cast(pl.Int64).cast(pl.Datetime(EPOCH_UNITS[fmt]))
+    )
+```
+
+### List supported formats
+
+```python
+import infer_ts
+
+for name, polars_fmt in infer_ts.supported_formats():
+    print(f"{name:45} → {polars_fmt}")
+```
+
+## Ambiguity example
+
+US and EU slash dates are inherently ambiguous when every day value is ≤ 12.
+The CSP resolves this automatically once any value has a day > 12:
+
+```python
+import infer_ts
+
+# Ambiguous – both mm/dd and dd/mm interpretations are valid for every row
+infer_ts.infer_format(["01/02/2024", "03/04/2024"])
+# → ValueError: ambiguous: 2 formats match all values: [...]
+
+# Resolved – day 15 > 12 eliminates the US interpretation
+infer_ts.infer_format(["01/02/2024", "15/03/2024"])
+# → "%d/%m/%Y"  (EU)
+```
+
+## License
+
+MIT
