@@ -96,25 +96,25 @@ impl Format {
     /// Human-readable label.
     pub fn name(&self) -> &'static str {
         match self {
-            Format::Iso8601DateTime           => "ISO 8601 datetime",
-            Format::Iso8601DateTimeUtc        => "ISO 8601 datetime (UTC Z)",
-            Format::Iso8601DateTimeOffset     => "ISO 8601 datetime (offset)",
-            Format::Iso8601DateTimeFrac       => "ISO 8601 datetime (fractional seconds)",
-            Format::Iso8601DateTimeFracUtc    => "ISO 8601 datetime (fractional + UTC Z)",
+            Format::Iso8601DateTime => "ISO 8601 datetime",
+            Format::Iso8601DateTimeUtc => "ISO 8601 datetime (UTC Z)",
+            Format::Iso8601DateTimeOffset => "ISO 8601 datetime (offset)",
+            Format::Iso8601DateTimeFrac => "ISO 8601 datetime (fractional seconds)",
+            Format::Iso8601DateTimeFracUtc => "ISO 8601 datetime (fractional + UTC Z)",
             Format::Iso8601DateTimeFracOffset => "ISO 8601 datetime (fractional + offset)",
-            Format::SpaceDateTime             => "Space-separated datetime",
-            Format::SpaceDateTimeFrac         => "Space-separated datetime (fractional seconds)",
-            Format::DateISO                   => "ISO 8601 date",
-            Format::DateSlashUS               => "US slash date (mm/dd/yyyy)",
-            Format::DateSlashEU               => "EU slash date (dd/mm/yyyy)",
-            Format::DateTimeSlashUS           => "US slash datetime",
-            Format::DateTimeSlashEU           => "EU slash datetime",
-            Format::DateCompact               => "Compact date (yyyymmdd)",
-            Format::DateTimeCompact           => "Compact datetime (yyyymmddThhmmss)",
-            Format::UnixSeconds               => "Unix epoch seconds",
-            Format::UnixMilliseconds          => "Unix epoch milliseconds",
-            Format::UnixMicroseconds          => "Unix epoch microseconds",
-            Format::UnixNanoseconds           => "Unix epoch nanoseconds",
+            Format::SpaceDateTime => "Space-separated datetime",
+            Format::SpaceDateTimeFrac => "Space-separated datetime (fractional seconds)",
+            Format::DateISO => "ISO 8601 date",
+            Format::DateSlashUS => "US slash date (mm/dd/yyyy)",
+            Format::DateSlashEU => "EU slash date (dd/mm/yyyy)",
+            Format::DateTimeSlashUS => "US slash datetime",
+            Format::DateTimeSlashEU => "EU slash datetime",
+            Format::DateCompact => "Compact date (yyyymmdd)",
+            Format::DateTimeCompact => "Compact datetime (yyyymmddThhmmss)",
+            Format::UnixSeconds => "Unix epoch seconds",
+            Format::UnixMilliseconds => "Unix epoch milliseconds",
+            Format::UnixMicroseconds => "Unix epoch microseconds",
+            Format::UnixNanoseconds => "Unix epoch nanoseconds",
         }
     }
 
@@ -124,25 +124,25 @@ impl Format {
     /// handles them via integer casting, not format-string parsing.
     pub fn polars_format(&self) -> &'static str {
         match self {
-            Format::Iso8601DateTime           => "%Y-%m-%dT%H:%M:%S",
-            Format::Iso8601DateTimeUtc        => "%Y-%m-%dT%H:%M:%SZ",
-            Format::Iso8601DateTimeOffset     => "%Y-%m-%dT%H:%M:%S%:z",
-            Format::Iso8601DateTimeFrac       => "%Y-%m-%dT%H:%M:%S%.f",
-            Format::Iso8601DateTimeFracUtc    => "%Y-%m-%dT%H:%M:%S%.fZ",
+            Format::Iso8601DateTime => "%Y-%m-%dT%H:%M:%S",
+            Format::Iso8601DateTimeUtc => "%Y-%m-%dT%H:%M:%SZ",
+            Format::Iso8601DateTimeOffset => "%Y-%m-%dT%H:%M:%S%:z",
+            Format::Iso8601DateTimeFrac => "%Y-%m-%dT%H:%M:%S%.f",
+            Format::Iso8601DateTimeFracUtc => "%Y-%m-%dT%H:%M:%S%.fZ",
             Format::Iso8601DateTimeFracOffset => "%Y-%m-%dT%H:%M:%S%.f%:z",
-            Format::SpaceDateTime             => "%Y-%m-%d %H:%M:%S",
-            Format::SpaceDateTimeFrac         => "%Y-%m-%d %H:%M:%S%.f",
-            Format::DateISO                   => "%Y-%m-%d",
-            Format::DateSlashUS               => "%m/%d/%Y",
-            Format::DateSlashEU               => "%d/%m/%Y",
-            Format::DateTimeSlashUS           => "%m/%d/%Y %H:%M:%S",
-            Format::DateTimeSlashEU           => "%d/%m/%Y %H:%M:%S",
-            Format::DateCompact               => "%Y%m%d",
-            Format::DateTimeCompact           => "%Y%m%dT%H%M%S",
-            Format::UnixSeconds               => "@unix_seconds",
-            Format::UnixMilliseconds          => "@unix_ms",
-            Format::UnixMicroseconds          => "@unix_us",
-            Format::UnixNanoseconds           => "@unix_ns",
+            Format::SpaceDateTime => "%Y-%m-%d %H:%M:%S",
+            Format::SpaceDateTimeFrac => "%Y-%m-%d %H:%M:%S%.f",
+            Format::DateISO => "%Y-%m-%d",
+            Format::DateSlashUS => "%m/%d/%Y",
+            Format::DateSlashEU => "%d/%m/%Y",
+            Format::DateTimeSlashUS => "%m/%d/%Y %H:%M:%S",
+            Format::DateTimeSlashEU => "%d/%m/%Y %H:%M:%S",
+            Format::DateCompact => "%Y%m%d",
+            Format::DateTimeCompact => "%Y%m%dT%H%M%S",
+            Format::UnixSeconds => "@unix_seconds",
+            Format::UnixMilliseconds => "@unix_ms",
+            Format::UnixMicroseconds => "@unix_us",
+            Format::UnixNanoseconds => "@unix_ns",
         }
     }
 
@@ -172,12 +172,16 @@ impl Format {
                 };
                 ts.separator == Separator::T
                     && match self {
-                        Format::Iso8601DateTime           => !ts.has_frac && ts.suffix == Suffix::None,
-                        Format::Iso8601DateTimeUtc        => !ts.has_frac && ts.suffix == Suffix::UtcZ,
-                        Format::Iso8601DateTimeOffset     => !ts.has_frac && ts.suffix == Suffix::Offset,
-                        Format::Iso8601DateTimeFrac       => ts.has_frac  && ts.suffix == Suffix::None,
-                        Format::Iso8601DateTimeFracUtc    => ts.has_frac  && ts.suffix == Suffix::UtcZ,
-                        Format::Iso8601DateTimeFracOffset => ts.has_frac  && ts.suffix == Suffix::Offset,
+                        Format::Iso8601DateTime => !ts.has_frac && ts.suffix == Suffix::None,
+                        Format::Iso8601DateTimeUtc => !ts.has_frac && ts.suffix == Suffix::UtcZ,
+                        Format::Iso8601DateTimeOffset => {
+                            !ts.has_frac && ts.suffix == Suffix::Offset
+                        }
+                        Format::Iso8601DateTimeFrac => ts.has_frac && ts.suffix == Suffix::None,
+                        Format::Iso8601DateTimeFracUtc => ts.has_frac && ts.suffix == Suffix::UtcZ,
+                        Format::Iso8601DateTimeFracOffset => {
+                            ts.has_frac && ts.suffix == Suffix::Offset
+                        }
                         _ => unreachable!(),
                     }
             }
@@ -190,7 +194,7 @@ impl Format {
                 ts.separator == Separator::Space
                     && ts.suffix == Suffix::None
                     && match self {
-                        Format::SpaceDateTime     => !ts.has_frac,
+                        Format::SpaceDateTime => !ts.has_frac,
                         Format::SpaceDateTimeFrac => ts.has_frac,
                         _ => unreachable!(),
                     }
@@ -206,7 +210,7 @@ impl Format {
             | Format::DateTimeSlashEU => validate_slash(value, self),
 
             // ── Compact ─────────────────────────────────────────────────────
-            Format::DateCompact     => validate_compact_date(value),
+            Format::DateCompact => validate_compact_date(value),
             Format::DateTimeCompact => validate_compact_datetime(value),
 
             // ── Unix epoch ──────────────────────────────────────────────────
@@ -223,8 +227,8 @@ impl Format {
 /// Structural description of a parsed ISO-like timestamp.
 struct IsoStructure {
     separator: Separator,
-    has_frac:  bool,
-    suffix:    Suffix,
+    has_frac: bool,
+    suffix: Suffix,
 }
 
 #[derive(PartialEq)]
@@ -254,8 +258,8 @@ fn parse_iso_like(s: &str) -> Option<IsoStructure> {
     // Separator at byte 10
     let separator = match s.as_bytes()[10] {
         b'T' | b't' => Separator::T,
-        b' '        => Separator::Space,
-        _           => return None,
+        b' ' => Separator::Space,
+        _ => return None,
     };
 
     // Time part HH:MM:SS (bytes 11..19)
@@ -301,7 +305,11 @@ fn parse_iso_like(s: &str) -> Option<IsoStructure> {
         return None;
     }
 
-    Some(IsoStructure { separator, has_frac, suffix })
+    Some(IsoStructure {
+        separator,
+        has_frac,
+        suffix,
+    })
 }
 
 /// Validate and return a `NaiveDate` from a `YYYY-MM-DD` string (exactly 10 bytes).
@@ -309,9 +317,9 @@ fn parse_iso_date(s: &str) -> Option<NaiveDate> {
     if s.len() != 10 || s.as_bytes()[4] != b'-' || s.as_bytes()[7] != b'-' {
         return None;
     }
-    let year:  i32  = s[0..4].parse().ok()?;
-    let month: u32  = s[5..7].parse().ok()?;
-    let day:   u32  = s[8..10].parse().ok()?;
+    let year: i32 = s[0..4].parse().ok()?;
+    let month: u32 = s[5..7].parse().ok()?;
+    let day: u32 = s[8..10].parse().ok()?;
     NaiveDate::from_ymd_opt(year, month, day)
 }
 
@@ -342,12 +350,16 @@ fn parse_tz_offset(s: &str) -> Option<usize> {
     if s.len() >= 6 && s.as_bytes()[3] == b':' {
         // ±HH:MM
         let m: u32 = s[4..6].parse().ok()?;
-        if m > 59 { return None; }
+        if m > 59 {
+            return None;
+        }
         Some(6)
     } else {
         // ±HHMM
         let m: u32 = s[3..5].parse().ok()?;
-        if m > 59 { return None; }
+        if m > 59 {
+            return None;
+        }
         Some(5)
     }
 }
@@ -358,24 +370,30 @@ fn validate_slash(s: &str, fmt: &Format) -> bool {
     // Split on the first space to separate date and optional time.
     let (date_part, time_part) = match s.find(' ') {
         Some(pos) => (&s[..pos], Some(&s[pos + 1..])),
-        None      => (s, None),
+        None => (s, None),
     };
 
     // Date must be exactly AA/BB/CCCC  (2 / 2 / 4 digits)
-    if date_part.len() != 10
-        || date_part.as_bytes()[2] != b'/'
-        || date_part.as_bytes()[5] != b'/'
-    {
+    if date_part.len() != 10 || date_part.as_bytes()[2] != b'/' || date_part.as_bytes()[5] != b'/' {
         return false;
     }
 
-    let a:    u32  = match date_part[0..2].parse()  { Ok(v) => v, Err(_) => return false };
-    let b:    u32  = match date_part[3..5].parse()  { Ok(v) => v, Err(_) => return false };
-    let year: i32  = match date_part[6..10].parse() { Ok(v) => v, Err(_) => return false };
+    let a: u32 = match date_part[0..2].parse() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let b: u32 = match date_part[3..5].parse() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let year: i32 = match date_part[6..10].parse() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
 
     let (month, day) = match fmt {
-        Format::DateSlashUS | Format::DateTimeSlashUS => (a, b),   // mm/dd/yyyy
-        Format::DateSlashEU | Format::DateTimeSlashEU => (b, a),   // dd/mm/yyyy
+        Format::DateSlashUS | Format::DateTimeSlashUS => (a, b), // mm/dd/yyyy
+        Format::DateSlashEU | Format::DateTimeSlashEU => (b, a), // dd/mm/yyyy
         _ => unreachable!(),
     };
 
@@ -385,9 +403,9 @@ fn validate_slash(s: &str, fmt: &Format) -> bool {
 
     let expects_time = matches!(fmt, Format::DateTimeSlashUS | Format::DateTimeSlashEU);
     match (expects_time, time_part) {
-        (true,  Some(t)) => t.len() == 8 && parse_hms(t).is_some(),
-        (false, None)    => true,
-        _                => false,
+        (true, Some(t)) => t.len() == 8 && parse_hms(t).is_some(),
+        (false, None) => true,
+        _ => false,
     }
 }
 
@@ -398,9 +416,9 @@ fn validate_compact_date(s: &str) -> bool {
         return false;
     }
     // Safety: we verified exactly 8 ASCII digits above.
-    let year:  i32  = s[0..4].parse().unwrap();
-    let month: u32  = s[4..6].parse().unwrap();
-    let day:   u32  = s[6..8].parse().unwrap();
+    let year: i32 = s[0..4].parse().unwrap();
+    let month: u32 = s[4..6].parse().unwrap();
+    let day: u32 = s[6..8].parse().unwrap();
     NaiveDate::from_ymd_opt(year, month, day).is_some()
 }
 
@@ -416,8 +434,8 @@ fn validate_compact_datetime(s: &str) -> bool {
     if !time.bytes().all(|b| b.is_ascii_digit()) {
         return false;
     }
-    let h: u32   = time[0..2].parse().unwrap();
-    let m: u32   = time[2..4].parse().unwrap();
+    let h: u32 = time[0..2].parse().unwrap();
+    let m: u32 = time[2..4].parse().unwrap();
     let sec: u32 = time[4..6].parse().unwrap();
     h <= 23 && m <= 59 && sec <= 59
 }
@@ -450,10 +468,10 @@ fn validate_unix(s: &str, fmt: &Format) -> bool {
 
     let digits = num_str.len();
     match fmt {
-        Format::UnixSeconds       => (9..=10).contains(&digits),
-        Format::UnixMilliseconds  => (11..=13).contains(&digits),
-        Format::UnixMicroseconds  => (14..=16).contains(&digits),
-        Format::UnixNanoseconds   => (17..=19).contains(&digits),
+        Format::UnixSeconds => (9..=10).contains(&digits),
+        Format::UnixMilliseconds => (11..=13).contains(&digits),
+        Format::UnixMicroseconds => (14..=16).contains(&digits),
+        Format::UnixNanoseconds => (17..=19).contains(&digits),
         _ => unreachable!(),
     }
 }
@@ -473,7 +491,11 @@ mod tests {
             if *fmt == expected {
                 assert!(ok, "{:?} should accept {:?}", fmt, value);
             } else {
-                assert!(!ok, "{:?} should reject {:?} (only {:?} expected)", fmt, value, expected);
+                assert!(
+                    !ok,
+                    "{:?} should reject {:?} (only {:?} expected)",
+                    fmt, value, expected
+                );
             }
         }
     }
@@ -531,12 +553,18 @@ mod tests {
 
     #[test]
     fn iso8601_frac_utc() {
-        assert_only("2024-01-15T10:30:00.123456Z", Format::Iso8601DateTimeFracUtc);
+        assert_only(
+            "2024-01-15T10:30:00.123456Z",
+            Format::Iso8601DateTimeFracUtc,
+        );
     }
 
     #[test]
     fn iso8601_frac_offset() {
-        assert_only("2024-01-15T10:30:00.123456+05:30", Format::Iso8601DateTimeFracOffset);
+        assert_only(
+            "2024-01-15T10:30:00.123456+05:30",
+            Format::Iso8601DateTimeFracOffset,
+        );
     }
 
     #[test]
@@ -768,6 +796,6 @@ mod tests {
     fn garbage() {
         assert_none("not a timestamp");
         assert_none("hello world");
-        assert_none("2024/01/15");  // slash with yyyy first — not a supported layout
+        assert_none("2024/01/15"); // slash with yyyy first — not a supported layout
     }
 }

@@ -5,10 +5,10 @@
 //! 1. **Initialise** – seed the candidate set with every known [`Format`].
 //! 2. **Propagate** – for each non-null value in the column:
 //!    a. Remove every candidate whose [`Format::validates`] returns `false`.
-//!    b. If the set is now empty → no format fits; return [`InferenceError::NoMatch`].
-//!    c. If exactly one candidate remains → return it immediately (**early exit**).
-//! 3. **Finalise** – after all values are processed, return the single survivor or
-//!    an error if zero or more than one remain.
+//!    b. If the set is now empty → return empty list (no format fits all values).
+//!    c. If exactly one candidate remains and `exhaustive=false` → return it
+//!    immediately (**early exit**).
+//! 3. **Finalise** – return all surviving candidates (sorted by name).
 //!
 //! Average-case complexity is *O(N × F)* (N = values, F = candidate formats), but
 //! the early-exit means most real columns resolve within the first few rows.
@@ -17,57 +17,25 @@ use std::collections::HashSet;
 
 use crate::formats::Format;
 
-// ─── Error Type ──────────────────────────────────────────────────────────────
-
-/// Errors produced by the inference engine.
-#[derive(Debug)]
-pub enum InferenceError {
-    /// No single format is consistent with every non-null value.
-    NoMatch,
-    /// More than one format survived all constraints (column is ambiguous).
-    Ambiguous(Vec<&'static str>),
-    /// Every value in the slice was `None` or whitespace-only.
-    EmptyColumn,
-}
-
-impl std::fmt::Display for InferenceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoMatch => {
-                write!(f, "no timestamp format matches all values in the column")
-            }
-            Self::Ambiguous(names) => {
-                write!(
-                    f,
-                    "ambiguous: {} formats match all values: {:?}",
-                    names.len(),
-                    names
-                )
-            }
-            Self::EmptyColumn => {
-                write!(f, "cannot infer format — column contains only null/empty values")
-            }
-        }
-    }
-}
-
-impl std::error::Error for InferenceError {}
-
-impl From<InferenceError> for pyo3::PyErr {
-    fn from(err: InferenceError) -> pyo3::PyErr {
-        pyo3::exceptions::PyValueError::new_err(err.to_string())
-    }
-}
-
 // ─── Inference Engine ────────────────────────────────────────────────────────
 
 /// Run CSP format inference over a slice of (possibly null) string values.
 ///
 /// `None` entries and whitespace-only strings are skipped (treated as nulls).
-/// Returns the uniquely determined [`Format`] or an [`InferenceError`].
-pub fn infer(values: &[Option<&str>]) -> Result<Format, InferenceError> {
+///
+/// # Arguments
+/// * `values` - Slice of optional string values to infer format from
+/// * `exhaustive` - If `true`, process all values and return all compatible formats.
+///   If `false`, return as soon as only one format remains (early exit).
+///
+/// # Returns
+/// A `Vec<Format>` containing all formats compatible with the input values:
+/// - If `exhaustive=false` and early-exit triggered: single-element Vec
+/// - If `exhaustive=true` or no early exit: all surviving formats (sorted by name)
+/// - If no non-null values were seen: all formats (empty column = all compatible)
+/// - If no format matches all values: empty Vec
+pub fn infer(values: &[Option<&str>], exhaustive: bool) -> Vec<Format> {
     let mut candidates: HashSet<Format> = Format::all().iter().copied().collect();
-    let mut seen_any = false;
 
     for opt_value in values {
         // Extract and trim; skip nulls / blanks.
@@ -77,7 +45,6 @@ pub fn infer(values: &[Option<&str>]) -> Result<Format, InferenceError> {
                 if trimmed.is_empty() {
                     continue;
                 }
-                seen_any = true;
                 trimmed
             }
             None => continue,
@@ -87,25 +54,19 @@ pub fn infer(values: &[Option<&str>]) -> Result<Format, InferenceError> {
         candidates.retain(|fmt| fmt.validates(value));
 
         match candidates.len() {
-            0 => return Err(InferenceError::NoMatch),
-            1 => return Ok(*candidates.iter().next().unwrap()), // early exit
+            0 => return vec![], // No format matches all values
+            1 if !exhaustive => {
+                // Early exit: return single-element Vec
+                return vec![*candidates.iter().next().unwrap()];
+            }
             _ => {} // keep narrowing
         }
     }
 
-    if !seen_any {
-        return Err(InferenceError::EmptyColumn);
-    }
-
-    match candidates.len() {
-        0 => Err(InferenceError::NoMatch),
-        1 => Ok(*candidates.iter().next().unwrap()),
-        _ => {
-            let mut names: Vec<&'static str> = candidates.iter().map(|f| f.name()).collect();
-            names.sort_unstable();
-            Err(InferenceError::Ambiguous(names))
-        }
-    }
+    // Return all surviving candidates sorted by name for deterministic output
+    let mut result: Vec<Format> = candidates.into_iter().collect();
+    result.sort_by_key(|f| f.name());
+    result
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -127,152 +88,155 @@ mod tests {
     #[test]
     fn infer_iso8601_plain() {
         assert_eq!(
-            infer(&vals(&["2024-01-15T10:30:00", "2024-06-20T08:00:00"])).unwrap(),
-            Format::Iso8601DateTime
+            infer(
+                &vals(&["2024-01-15T10:30:00", "2024-06-20T08:00:00"]),
+                false
+            ),
+            vec![Format::Iso8601DateTime]
         );
     }
 
     #[test]
     fn infer_iso8601_utc() {
         assert_eq!(
-            infer(&vals(&["2024-01-15T10:30:00Z"])).unwrap(),
-            Format::Iso8601DateTimeUtc
+            infer(&vals(&["2024-01-15T10:30:00Z"]), false),
+            vec![Format::Iso8601DateTimeUtc]
         );
     }
 
     #[test]
     fn infer_iso8601_offset() {
         assert_eq!(
-            infer(&vals(&["2024-01-15T10:30:00+05:30"])).unwrap(),
-            Format::Iso8601DateTimeOffset
+            infer(&vals(&["2024-01-15T10:30:00+05:30"]), false),
+            vec![Format::Iso8601DateTimeOffset]
         );
     }
 
     #[test]
     fn infer_iso8601_frac() {
         assert_eq!(
-            infer(&vals(&["2024-01-15T10:30:00.123"])).unwrap(),
-            Format::Iso8601DateTimeFrac
+            infer(&vals(&["2024-01-15T10:30:00.123"]), false),
+            vec![Format::Iso8601DateTimeFrac]
         );
     }
 
     #[test]
     fn infer_iso8601_frac_utc() {
         assert_eq!(
-            infer(&vals(&["2024-01-15T10:30:00.123Z"])).unwrap(),
-            Format::Iso8601DateTimeFracUtc
+            infer(&vals(&["2024-01-15T10:30:00.123Z"]), false),
+            vec![Format::Iso8601DateTimeFracUtc]
         );
     }
 
     #[test]
     fn infer_iso8601_frac_offset() {
         assert_eq!(
-            infer(&vals(&["2024-01-15T10:30:00.123+05:30"])).unwrap(),
-            Format::Iso8601DateTimeFracOffset
+            infer(&vals(&["2024-01-15T10:30:00.123+05:30"]), false),
+            vec![Format::Iso8601DateTimeFracOffset]
         );
     }
 
     #[test]
     fn infer_space_plain() {
         assert_eq!(
-            infer(&vals(&["2024-01-15 10:30:00"])).unwrap(),
-            Format::SpaceDateTime
+            infer(&vals(&["2024-01-15 10:30:00"]), false),
+            vec![Format::SpaceDateTime]
         );
     }
 
     #[test]
     fn infer_space_frac() {
         assert_eq!(
-            infer(&vals(&["2024-01-15 10:30:00.999999"])).unwrap(),
-            Format::SpaceDateTimeFrac
+            infer(&vals(&["2024-01-15 10:30:00.999999"]), false),
+            vec![Format::SpaceDateTimeFrac]
         );
     }
 
     #[test]
     fn infer_date_iso() {
         assert_eq!(
-            infer(&vals(&["2024-01-15", "2024-06-20"])).unwrap(),
-            Format::DateISO
+            infer(&vals(&["2024-01-15", "2024-06-20"]), false),
+            vec![Format::DateISO]
         );
     }
 
     #[test]
     fn infer_slash_us_unambiguous() {
         assert_eq!(
-            infer(&vals(&["01/15/2024", "06/20/2024"])).unwrap(),
-            Format::DateSlashUS
+            infer(&vals(&["01/15/2024", "06/20/2024"]), false),
+            vec![Format::DateSlashUS]
         );
     }
 
     #[test]
     fn infer_slash_eu_unambiguous() {
         assert_eq!(
-            infer(&vals(&["15/01/2024", "20/06/2024"])).unwrap(),
-            Format::DateSlashEU
+            infer(&vals(&["15/01/2024", "20/06/2024"]), false),
+            vec![Format::DateSlashEU]
         );
     }
 
     #[test]
     fn infer_slash_us_datetime() {
         assert_eq!(
-            infer(&vals(&["01/15/2024 10:30:00"])).unwrap(),
-            Format::DateTimeSlashUS
+            infer(&vals(&["01/15/2024 10:30:00"]), false),
+            vec![Format::DateTimeSlashUS]
         );
     }
 
     #[test]
     fn infer_slash_eu_datetime() {
         assert_eq!(
-            infer(&vals(&["15/01/2024 10:30:00"])).unwrap(),
-            Format::DateTimeSlashEU
+            infer(&vals(&["15/01/2024 10:30:00"]), false),
+            vec![Format::DateTimeSlashEU]
         );
     }
 
     #[test]
     fn infer_compact_date() {
         assert_eq!(
-            infer(&vals(&["20240115", "20240620"])).unwrap(),
-            Format::DateCompact
+            infer(&vals(&["20240115", "20240620"]), false),
+            vec![Format::DateCompact]
         );
     }
 
     #[test]
     fn infer_compact_datetime() {
         assert_eq!(
-            infer(&vals(&["20240115T103000"])).unwrap(),
-            Format::DateTimeCompact
+            infer(&vals(&["20240115T103000"]), false),
+            vec![Format::DateTimeCompact]
         );
     }
 
     #[test]
     fn infer_unix_seconds() {
         assert_eq!(
-            infer(&vals(&["1705312200", "1705398600"])).unwrap(),
-            Format::UnixSeconds
+            infer(&vals(&["1705312200", "1705398600"]), false),
+            vec![Format::UnixSeconds]
         );
     }
 
     #[test]
     fn infer_unix_ms() {
         assert_eq!(
-            infer(&vals(&["1705312200000", "1705398600000"])).unwrap(),
-            Format::UnixMilliseconds
+            infer(&vals(&["1705312200000", "1705398600000"]), false),
+            vec![Format::UnixMilliseconds]
         );
     }
 
     #[test]
     fn infer_unix_us() {
         assert_eq!(
-            infer(&vals(&["1705312200000000"])).unwrap(),
-            Format::UnixMicroseconds
+            infer(&vals(&["1705312200000000"]), false),
+            vec![Format::UnixMicroseconds]
         );
     }
 
     #[test]
     fn infer_unix_ns() {
         assert_eq!(
-            infer(&vals(&["1705312200000000000"])).unwrap(),
-            Format::UnixNanoseconds
+            infer(&vals(&["1705312200000000000"]), false),
+            vec![Format::UnixNanoseconds]
         );
     }
 
@@ -282,8 +246,8 @@ mod tests {
     fn slash_eu_resolved_midway() {
         // First value ambiguous (day ≤ 12 in both positions), second resolves to EU.
         assert_eq!(
-            infer(&vals(&["01/02/2024", "15/03/2024"])).unwrap(),
-            Format::DateSlashEU
+            infer(&vals(&["01/02/2024", "15/03/2024"]), false),
+            vec![Format::DateSlashEU]
         );
     }
 
@@ -291,16 +255,19 @@ mod tests {
     fn slash_us_resolved_midway() {
         // First value ambiguous, second resolves to US (day 20 in second slot).
         assert_eq!(
-            infer(&vals(&["01/02/2024", "03/20/2024"])).unwrap(),
-            Format::DateSlashUS
+            infer(&vals(&["01/02/2024", "03/20/2024"]), false),
+            vec![Format::DateSlashUS]
         );
     }
 
     #[test]
     fn slash_eu_datetime_resolved_midway() {
         assert_eq!(
-            infer(&vals(&["01/02/2024 10:00:00", "15/03/2024 11:00:00"])).unwrap(),
-            Format::DateTimeSlashEU
+            infer(
+                &vals(&["01/02/2024 10:00:00", "15/03/2024 11:00:00"]),
+                false
+            ),
+            vec![Format::DateTimeSlashEU]
         );
     }
 
@@ -315,91 +282,143 @@ mod tests {
             Some("2024-06-20T08:00:00"),
             None,
         ];
-        assert_eq!(infer(&input).unwrap(), Format::Iso8601DateTime);
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTime]);
     }
 
     #[test]
     fn whitespace_only_skipped() {
-        let input: Vec<Option<&str>> = vec![
-            Some("   "),
-            Some("2024-01-15T10:30:00"),
-            Some("\t\n"),
-        ];
-        assert_eq!(infer(&input).unwrap(), Format::Iso8601DateTime);
+        let input: Vec<Option<&str>> = vec![Some("   "), Some("2024-01-15T10:30:00"), Some("\t\n")];
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTime]);
     }
 
     #[test]
     fn leading_trailing_whitespace_trimmed() {
         let input: Vec<Option<&str>> = vec![Some("  2024-01-15T10:30:00  ")];
-        assert_eq!(infer(&input).unwrap(), Format::Iso8601DateTime);
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTime]);
     }
 
-    // ── Error cases ─────────────────────────────────────────────────────────
+    // ── Empty column handling ───────────────────────────────────────────────
 
     #[test]
-    fn all_nulls_is_empty_column() {
+    fn all_nulls_returns_all_formats() {
         let input: Vec<Option<&str>> = vec![None, None, None];
-        assert!(matches!(infer(&input), Err(InferenceError::EmptyColumn)));
+        let result = infer(&input, false);
+        assert_eq!(result.len(), Format::all().len());
     }
 
     #[test]
-    fn empty_slice_is_empty_column() {
+    fn empty_slice_returns_all_formats() {
         let input: Vec<Option<&str>> = vec![];
-        assert!(matches!(infer(&input), Err(InferenceError::EmptyColumn)));
+        let result = infer(&input, false);
+        assert_eq!(result.len(), Format::all().len());
     }
+
+    // ── No-match cases (return empty vec) ───────────────────────────────────
 
     #[test]
     fn incompatible_formats_no_match() {
         // Ambiguous slash date first (keeps US + EU alive, does NOT early-exit),
         // then an ISO datetime that neither slash format can parse → empty set.
         let input = vals(&["01/02/2024", "2024-01-15T10:30:00"]);
-        assert!(matches!(infer(&input), Err(InferenceError::NoMatch)));
+        assert_eq!(infer(&input, false), vec![]);
     }
 
     #[test]
     fn garbage_no_match() {
         let input = vals(&["not a timestamp at all"]);
-        assert!(matches!(infer(&input), Err(InferenceError::NoMatch)));
+        assert_eq!(infer(&input, false), vec![]);
     }
 
+    // ── Multiple formats returned (ambiguous cases) ─────────────────────────
+
     #[test]
-    fn ambiguous_slash_dates() {
+    fn ambiguous_slash_dates_returns_both() {
         // Every day value ≤ 12 → US and EU both survive.
         let input = vals(&["01/02/2024", "03/04/2024", "05/06/2024"]);
-        assert!(matches!(infer(&input), Err(InferenceError::Ambiguous(_))));
+        let result = infer(&input, false);
+        assert!(result.contains(&Format::DateSlashUS));
+        assert!(result.contains(&Format::DateSlashEU));
+        assert_eq!(result.len(), 2);
     }
 
     #[test]
-    fn ambiguous_slash_datetimes() {
+    fn ambiguous_slash_datetimes_returns_both() {
         let input = vals(&["01/02/2024 10:00:00", "03/04/2024 11:00:00"]);
-        assert!(matches!(infer(&input), Err(InferenceError::Ambiguous(_))));
+        let result = infer(&input, false);
+        assert!(result.contains(&Format::DateTimeSlashUS));
+        assert!(result.contains(&Format::DateTimeSlashEU));
+        assert_eq!(result.len(), 2);
     }
 
-    // ── Early-exit verification ─────────────────────────────────────────────
+    // ── Early-exit verification (non-exhaustive mode) ───────────────────────
     // A format that resolves after one value should never read further values.
-    // If early exit is broken the garbage value below would cause NoMatch.
+    // If early exit is broken the garbage value below would cause empty result.
 
     #[test]
     fn early_exit_iso8601_offset() {
         let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
-        assert_eq!(infer(&input).unwrap(), Format::Iso8601DateTimeOffset);
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeOffset]);
     }
 
     #[test]
     fn early_exit_iso8601_frac_utc() {
         let input = vals(&["2024-01-15T10:30:00.123Z", "GARBAGE"]);
-        assert_eq!(infer(&input).unwrap(), Format::Iso8601DateTimeFracUtc);
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeFracUtc]);
     }
 
     #[test]
     fn early_exit_compact_datetime() {
         let input = vals(&["20240115T103000", "GARBAGE"]);
-        assert_eq!(infer(&input).unwrap(), Format::DateTimeCompact);
+        assert_eq!(infer(&input, false), vec![Format::DateTimeCompact]);
     }
 
     #[test]
     fn early_exit_unix_ns() {
         let input = vals(&["1705312200000000000", "GARBAGE"]);
-        assert_eq!(infer(&input).unwrap(), Format::UnixNanoseconds);
+        assert_eq!(infer(&input, false), vec![Format::UnixNanoseconds]);
+    }
+
+    // ── Exhaustive mode tests ───────────────────────────────────────────────
+
+    #[test]
+    fn exhaustive_mode_processes_all_values() {
+        // With non-exhaustive, this returns early after first value
+        let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
+
+        // Non-exhaustive: early exit, never sees GARBAGE
+        let non_exhaustive = infer(&input, false);
+        assert_eq!(non_exhaustive, vec![Format::Iso8601DateTimeOffset]);
+
+        // Exhaustive: processes all values including GARBAGE → no match
+        let exhaustive = infer(&input, true);
+        assert_eq!(exhaustive, vec![]);
+    }
+
+    #[test]
+    fn exhaustive_mode_returns_single_when_unique() {
+        // First value uniquely identifies ISO8601DateTimeOffset
+        let input = vals(&["2024-01-15T10:30:00+05:30"]);
+
+        // Both modes return the same result for unambiguous single-value input
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeOffset]);
+        assert_eq!(infer(&input, true), vec![Format::Iso8601DateTimeOffset]);
+    }
+
+    #[test]
+    fn exhaustive_mode_continues_after_single_candidate() {
+        // After first value, only one format matches. Non-exhaustive exits.
+        // Exhaustive continues and may find the remaining value also matches.
+        let input = vals(&["2024-01-15T10:30:00+05:30", "2024-06-20T08:00:00+02:00"]);
+
+        // Both should return the same single format
+        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeOffset]);
+        assert_eq!(infer(&input, true), vec![Format::Iso8601DateTimeOffset]);
+    }
+
+    #[test]
+    fn exhaustive_empty_column_returns_all_formats() {
+        let input: Vec<Option<&str>> = vec![None, None];
+        let result = infer(&input, true);
+        assert_eq!(result.len(), Format::all().len());
     }
 }
