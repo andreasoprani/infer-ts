@@ -19,7 +19,7 @@ later sections depend on earlier ones being solid.
   - Columns that start ambiguous and resolve mid-way
   - All-null / all-empty columns → returns all formats
   - Mixed nulls and valid values
-- [ ] **Integration test: round-trip with Polars** (Python test script)
+- [x] **Integration test: round-trip with Polars** (Python test script)
   - Spin up a `DataFrame`, call `infer_format`, apply the returned format with
     `str.to_datetime`, assert the resulting dtype is `Datetime`
   - Cover at least: ISO 8601, space-separated, US/EU slash, compact, Unix epoch
