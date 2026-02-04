@@ -49,6 +49,43 @@ later sections depend on earlier ones being solid.
   - Both `%:z` (colon) and `%z` (no colon) work in Polars
   - Split offset formats into colon (`+05:30` → `%:z`) and compact (`+0530` → `%z`) variants
   - Added `Iso8601DateTimeOffsetCompact` and `Iso8601DateTimeFracOffsetCompact` formats
+- [x] **Compositional format architecture** (`src/formats.rs`)
+  - Refactored from flat 21-variant enum to compositional structure
+  - Component enums: `DateFmt`, `Separator`, `TimeFmt`, `Timezone`, `UnixPrecision`
+  - `StandardFormat` enum with `DateOnly` and `DateTime` variants
+  - `UnixFormat` struct for epoch timestamps
+  - Top-level `Format` enum: `Standard(StandardFormat) | Unix(UnixFormat)`
+  - Named constants (`Format::Iso8601DateTime`, etc.) for backwards compatibility
+- [ ] **Programmatic format enumeration** (`src/formats.rs`)
+  - Current limitation: adding a new `DateFmt` still requires manually adding named
+    constants and updating `Format::all()`, `name()`, `polars_format()` for each combination
+  - Goal: generate all valid format combinations automatically from component enums
+  - Implementation steps:
+    1. Add `DateFmt::all()`, `UnixPrecision::all()` iterator methods
+    2. Add `DateFmt::valid_separators()` → which separators work with this date format
+       - `Iso` → `[T, Space]`
+       - `SlashUS`, `SlashEU` → `[Space]`
+       - `Compact` → `[T]`
+    3. Add `DateFmt::valid_time_formats()` → which time formats work with this date format
+       - `Iso` → `[Hms, HmsFrac]`
+       - `SlashUS`, `SlashEU` → `[Hms]`
+       - `Compact` → `[HmsCompact]`
+    4. Add `DateFmt::valid_timezones()` → which tz options work with this date format
+       - `Iso` → `[None, Some(Utc), Some(Offset), Some(OffsetCompact)]`
+       - `SlashUS`, `SlashEU`, `Compact` → `[None]`
+    5. Add `StandardFormat::all_valid()` → iterate over all valid combinations using above methods
+    6. Change `Format::all()` to use `OnceLock<Vec<Format>>` and generate from
+       `StandardFormat::all_valid()` + `UnixPrecision::all()`
+    7. Make `name()` and `polars_format()` compositional (build from component methods)
+       - Each component implements its own `name()` and `polars_format()` fragment
+       - `StandardFormat` assembles fragments: `date.fmt() + sep.fmt() + time.fmt() + tz.fmt()`
+       - Return type changes from `&'static str` to `String` (minor allocation trade-off)
+    8. Named constants become optional conveniences, no longer source of truth
+  - Result: adding new `DateFmt::Dot` requires only:
+    1. Add enum variant
+    2. Implement `valid_separators()`, `valid_time_formats()`, `valid_timezones()`
+    3. Implement `name()` and `polars_format()` fragments
+    4. All combinations auto-generated
 - [ ] Verify `%.f` fractional-second handling in Polars
   - Polars may require fixed-width specifiers like `%.3f` / `%.6f` / `%.9f`
   - If so, add fractional-precision detection to the validator and the format enum
@@ -92,6 +129,7 @@ later sections depend on earlier ones being solid.
 - [ ] **Format hint parameter**
   - Accept an optional format hint to skip inference when format is known
   - Useful for performance when format is predetermined
-- [ ] **Architecture considerations**
-  - Current `Vec<Format>` return type prepares for trying formats in priority order
-  - Consider returning `InferResult` struct with: formats, confidence score, error details
+- [x] ~~**Architecture considerations**~~ (done in v0.2)
+  - ~~Current `Vec<Format>` return type prepares for trying formats in priority order~~
+  - ~~Consider returning `InferResult` struct with: formats, confidence score, error details~~
+  - Compositional format architecture now in place; extending formats is straightforward

@@ -5,76 +5,245 @@
 //! no extra or missing components.  This exactness is what lets the CSP elimination
 //! in [`crate::inference`] work — each format's accepted set is as disjoint as
 //! possible from the others.
+//!
+//! # Architecture
+//!
+//! Formats are organized compositionally:
+//!
+//! - **Standard formats** combine a date format, optional separator, optional time,
+//!   and optional timezone. Not all combinations are valid (e.g., timezone requires time).
+//!
+//! - **Unix formats** are bare integers distinguished by digit count.
 
 use chrono::NaiveDate;
 
-// ─── Format Enum ─────────────────────────────────────────────────────────────
+// ─── Component Enums ─────────────────────────────────────────────────────────
+
+/// Date format within a standard timestamp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DateFmt {
+    /// `YYYY-MM-DD` (ISO 8601)
+    Iso,
+    /// `MM/DD/YYYY` (US convention)
+    SlashUS,
+    /// `DD/MM/YYYY` (EU convention)
+    SlashEU,
+    /// `YYYYMMDD` (compact, no separators)
+    Compact,
+}
+
+/// Separator between date and time components.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Separator {
+    /// `T` or `t` (ISO 8601)
+    T,
+    /// Single space
+    Space,
+}
+
+/// Time format within a standard timestamp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TimeFmt {
+    /// `HH:MM:SS`
+    Hms,
+    /// `HH:MM:SS.f` (1-9 fractional digits)
+    HmsFrac,
+    /// `HHMMSS` (compact, no colons) - only valid with Compact date
+    HmsCompact,
+}
+
+/// Timezone suffix on a timestamp.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Timezone {
+    /// `Z` or `z` (UTC)
+    Utc,
+    /// `±HH:MM` (with colon)
+    Offset,
+    /// `±HHMM` (compact, no colon)
+    OffsetCompact,
+}
+
+/// Unix timestamp precision, distinguished by digit count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnixPrecision {
+    /// 9–10 digits (seconds since epoch, ~1973–2286)
+    Seconds,
+    /// 11–13 digits (milliseconds)
+    Milliseconds,
+    /// 14–16 digits (microseconds)
+    Microseconds,
+    /// 17–19 digits (nanoseconds)
+    Nanoseconds,
+}
+
+// ─── Standard Format ─────────────────────────────────────────────────────────
+
+/// A standard datetime format composed of date, optional time, and optional timezone.
+///
+/// Constraints enforced by construction:
+/// - Cannot have timezone without time
+/// - Compact time (`HHMMSS`) only valid with compact date
+/// - Fractional seconds and timezone only valid with ISO/Space formats
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StandardFormat {
+    /// Date only (no time component)
+    DateOnly { date: DateFmt },
+    /// Date and time with optional timezone
+    DateTime {
+        date: DateFmt,
+        sep: Separator,
+        time: TimeFmt,
+        tz: Option<Timezone>,
+    },
+}
+
+// ─── Unix Format ─────────────────────────────────────────────────────────────
+
+/// Unix epoch timestamp (bare integer).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UnixFormat {
+    pub precision: UnixPrecision,
+}
+
+// ─── Top-Level Format Enum ───────────────────────────────────────────────────
 
 /// Every timestamp layout the inference engine can detect.
 ///
-/// Variants are grouped by family.  Within a group the order moves from
-/// least-decorated to most-decorated so the match arms read naturally.
+/// This is the top-level enum that encompasses both standard datetime formats
+/// and Unix epoch timestamps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {
-    // ── ISO 8601 (T separator) ──────────────────────────────────────────────
-    /// `2024-01-15T10:30:00`
-    Iso8601DateTime,
-    /// `2024-01-15T10:30:00Z`
-    Iso8601DateTimeUtc,
-    /// `2024-01-15T10:30:00+05:30` (colon in offset)
-    Iso8601DateTimeOffset,
-    /// `2024-01-15T10:30:00+0530` (compact offset, no colon)
-    Iso8601DateTimeOffsetCompact,
-    /// `2024-01-15T10:30:00.123456`
-    Iso8601DateTimeFrac,
-    /// `2024-01-15T10:30:00.123456Z`
-    Iso8601DateTimeFracUtc,
-    /// `2024-01-15T10:30:00.123456+05:30` (colon in offset)
-    Iso8601DateTimeFracOffset,
-    /// `2024-01-15T10:30:00.123456+0530` (compact offset, no colon)
-    Iso8601DateTimeFracOffsetCompact,
+    Standard(StandardFormat),
+    Unix(UnixFormat),
+}
 
-    // ── Space-separated ─────────────────────────────────────────────────────
-    /// `2024-01-15 10:30:00`
-    SpaceDateTime,
-    /// `2024-01-15 10:30:00.123456`
-    SpaceDateTimeFrac,
+// ─── Named Format Constants ──────────────────────────────────────────────────
+//
+// These provide backwards-compatible names for the 21 standard formats.
 
-    // ── Date-only ───────────────────────────────────────────────────────────
-    /// `2024-01-15`
-    DateISO,
+#[allow(non_upper_case_globals)]
+impl Format {
+    // ISO 8601 (T separator)
+    pub const Iso8601DateTime: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::Hms,
+        tz: None,
+    });
+    pub const Iso8601DateTimeUtc: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::Hms,
+        tz: Some(Timezone::Utc),
+    });
+    pub const Iso8601DateTimeOffset: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::Hms,
+        tz: Some(Timezone::Offset),
+    });
+    pub const Iso8601DateTimeOffsetCompact: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::Hms,
+        tz: Some(Timezone::OffsetCompact),
+    });
+    pub const Iso8601DateTimeFrac: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::HmsFrac,
+        tz: None,
+    });
+    pub const Iso8601DateTimeFracUtc: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::HmsFrac,
+        tz: Some(Timezone::Utc),
+    });
+    pub const Iso8601DateTimeFracOffset: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::T,
+        time: TimeFmt::HmsFrac,
+        tz: Some(Timezone::Offset),
+    });
+    pub const Iso8601DateTimeFracOffsetCompact: Format =
+        Format::Standard(StandardFormat::DateTime {
+            date: DateFmt::Iso,
+            sep: Separator::T,
+            time: TimeFmt::HmsFrac,
+            tz: Some(Timezone::OffsetCompact),
+        });
 
-    // ── Slash-separated (US: mm/dd/yyyy  EU: dd/mm/yyyy) ───────────────────
-    /// `01/15/2024`
-    DateSlashUS,
-    /// `15/01/2024`
-    DateSlashEU,
-    /// `01/15/2024 10:30:00`
-    DateTimeSlashUS,
-    /// `15/01/2024 10:30:00`
-    DateTimeSlashEU,
+    // Space-separated
+    pub const SpaceDateTime: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::Space,
+        time: TimeFmt::Hms,
+        tz: None,
+    });
+    pub const SpaceDateTimeFrac: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Iso,
+        sep: Separator::Space,
+        time: TimeFmt::HmsFrac,
+        tz: None,
+    });
 
-    // ── Compact ─────────────────────────────────────────────────────────────
-    /// `20240115`
-    DateCompact,
-    /// `20240115T103000`
-    DateTimeCompact,
+    // Date-only
+    pub const DateISO: Format = Format::Standard(StandardFormat::DateOnly { date: DateFmt::Iso });
+    pub const DateSlashUS: Format = Format::Standard(StandardFormat::DateOnly {
+        date: DateFmt::SlashUS,
+    });
+    pub const DateSlashEU: Format = Format::Standard(StandardFormat::DateOnly {
+        date: DateFmt::SlashEU,
+    });
+    pub const DateCompact: Format = Format::Standard(StandardFormat::DateOnly {
+        date: DateFmt::Compact,
+    });
 
-    // ── Unix epoch (bare integers) ──────────────────────────────────────────
-    /// 9–10 digit integer  (seconds since epoch, ~1973–2286)
-    UnixSeconds,
-    /// 11–13 digit integer (milliseconds)
-    UnixMilliseconds,
-    /// 14–16 digit integer (microseconds)
-    UnixMicroseconds,
-    /// 17–19 digit integer (nanoseconds)
-    UnixNanoseconds,
+    // Slash datetime
+    pub const DateTimeSlashUS: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::SlashUS,
+        sep: Separator::Space,
+        time: TimeFmt::Hms,
+        tz: None,
+    });
+    pub const DateTimeSlashEU: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::SlashEU,
+        sep: Separator::Space,
+        time: TimeFmt::Hms,
+        tz: None,
+    });
+
+    // Compact datetime
+    pub const DateTimeCompact: Format = Format::Standard(StandardFormat::DateTime {
+        date: DateFmt::Compact,
+        sep: Separator::T,
+        time: TimeFmt::HmsCompact,
+        tz: None,
+    });
+
+    // Unix epoch
+    pub const UnixSeconds: Format = Format::Unix(UnixFormat {
+        precision: UnixPrecision::Seconds,
+    });
+    pub const UnixMilliseconds: Format = Format::Unix(UnixFormat {
+        precision: UnixPrecision::Milliseconds,
+    });
+    pub const UnixMicroseconds: Format = Format::Unix(UnixFormat {
+        precision: UnixPrecision::Microseconds,
+    });
+    pub const UnixNanoseconds: Format = Format::Unix(UnixFormat {
+        precision: UnixPrecision::Nanoseconds,
+    });
 }
 
 impl Format {
     /// Every supported format in a fixed, deterministic order.
+    ///
+    /// The order matches the original flat enum for backwards compatibility.
     pub fn all() -> &'static [Format] {
         &[
+            // ISO 8601 (T separator)
             Format::Iso8601DateTime,
             Format::Iso8601DateTimeUtc,
             Format::Iso8601DateTimeOffset,
@@ -83,15 +252,20 @@ impl Format {
             Format::Iso8601DateTimeFracUtc,
             Format::Iso8601DateTimeFracOffset,
             Format::Iso8601DateTimeFracOffsetCompact,
+            // Space-separated
             Format::SpaceDateTime,
             Format::SpaceDateTimeFrac,
+            // Date-only
             Format::DateISO,
             Format::DateSlashUS,
             Format::DateSlashEU,
+            // Slash datetime
             Format::DateTimeSlashUS,
             Format::DateTimeSlashEU,
+            // Compact
             Format::DateCompact,
             Format::DateTimeCompact,
+            // Unix epoch
             Format::UnixSeconds,
             Format::UnixMilliseconds,
             Format::UnixMicroseconds,
@@ -102,29 +276,8 @@ impl Format {
     /// Human-readable label.
     pub fn name(&self) -> &'static str {
         match self {
-            Format::Iso8601DateTime => "ISO 8601 datetime",
-            Format::Iso8601DateTimeUtc => "ISO 8601 datetime (UTC Z)",
-            Format::Iso8601DateTimeOffset => "ISO 8601 datetime (offset)",
-            Format::Iso8601DateTimeOffsetCompact => "ISO 8601 datetime (compact offset)",
-            Format::Iso8601DateTimeFrac => "ISO 8601 datetime (fractional seconds)",
-            Format::Iso8601DateTimeFracUtc => "ISO 8601 datetime (fractional + UTC Z)",
-            Format::Iso8601DateTimeFracOffset => "ISO 8601 datetime (fractional + offset)",
-            Format::Iso8601DateTimeFracOffsetCompact => {
-                "ISO 8601 datetime (fractional + compact offset)"
-            }
-            Format::SpaceDateTime => "Space-separated datetime",
-            Format::SpaceDateTimeFrac => "Space-separated datetime (fractional seconds)",
-            Format::DateISO => "ISO 8601 date",
-            Format::DateSlashUS => "US slash date (mm/dd/yyyy)",
-            Format::DateSlashEU => "EU slash date (dd/mm/yyyy)",
-            Format::DateTimeSlashUS => "US slash datetime",
-            Format::DateTimeSlashEU => "EU slash datetime",
-            Format::DateCompact => "Compact date (yyyymmdd)",
-            Format::DateTimeCompact => "Compact datetime (yyyymmddThhmmss)",
-            Format::UnixSeconds => "Unix epoch seconds",
-            Format::UnixMilliseconds => "Unix epoch milliseconds",
-            Format::UnixMicroseconds => "Unix epoch microseconds",
-            Format::UnixNanoseconds => "Unix epoch nanoseconds",
+            Format::Standard(std) => std.name(),
+            Format::Unix(unix) => unix.name(),
         }
     }
 
@@ -134,27 +287,8 @@ impl Format {
     /// handles them via integer casting, not format-string parsing.
     pub fn polars_format(&self) -> &'static str {
         match self {
-            Format::Iso8601DateTime => "%Y-%m-%dT%H:%M:%S",
-            Format::Iso8601DateTimeUtc => "%Y-%m-%dT%H:%M:%SZ",
-            Format::Iso8601DateTimeOffset => "%Y-%m-%dT%H:%M:%S%:z",
-            Format::Iso8601DateTimeOffsetCompact => "%Y-%m-%dT%H:%M:%S%z",
-            Format::Iso8601DateTimeFrac => "%Y-%m-%dT%H:%M:%S%.f",
-            Format::Iso8601DateTimeFracUtc => "%Y-%m-%dT%H:%M:%S%.fZ",
-            Format::Iso8601DateTimeFracOffset => "%Y-%m-%dT%H:%M:%S%.f%:z",
-            Format::Iso8601DateTimeFracOffsetCompact => "%Y-%m-%dT%H:%M:%S%.f%z",
-            Format::SpaceDateTime => "%Y-%m-%d %H:%M:%S",
-            Format::SpaceDateTimeFrac => "%Y-%m-%d %H:%M:%S%.f",
-            Format::DateISO => "%Y-%m-%d",
-            Format::DateSlashUS => "%m/%d/%Y",
-            Format::DateSlashEU => "%d/%m/%Y",
-            Format::DateTimeSlashUS => "%m/%d/%Y %H:%M:%S",
-            Format::DateTimeSlashEU => "%d/%m/%Y %H:%M:%S",
-            Format::DateCompact => "%Y%m%d",
-            Format::DateTimeCompact => "%Y%m%dT%H%M%S",
-            Format::UnixSeconds => "@unix_seconds",
-            Format::UnixMilliseconds => "@unix_ms",
-            Format::UnixMicroseconds => "@unix_us",
-            Format::UnixNanoseconds => "@unix_ns",
+            Format::Standard(std) => std.polars_format(),
+            Format::Unix(unix) => unix.polars_format(),
         }
     }
 
@@ -172,72 +306,235 @@ impl Format {
         }
 
         match self {
-            // ── ISO 8601 group (T separator) ────────────────────────────────
-            Format::Iso8601DateTime
-            | Format::Iso8601DateTimeUtc
-            | Format::Iso8601DateTimeOffset
-            | Format::Iso8601DateTimeOffsetCompact
-            | Format::Iso8601DateTimeFrac
-            | Format::Iso8601DateTimeFracUtc
-            | Format::Iso8601DateTimeFracOffset
-            | Format::Iso8601DateTimeFracOffsetCompact => {
-                let Some(ts) = parse_iso_like(value) else {
-                    return false;
-                };
-                ts.separator == Separator::T
-                    && match self {
-                        Format::Iso8601DateTime => !ts.has_frac && ts.suffix == Suffix::None,
-                        Format::Iso8601DateTimeUtc => !ts.has_frac && ts.suffix == Suffix::UtcZ,
-                        Format::Iso8601DateTimeOffset => {
-                            !ts.has_frac && ts.suffix == Suffix::OffsetColon
-                        }
-                        Format::Iso8601DateTimeOffsetCompact => {
-                            !ts.has_frac && ts.suffix == Suffix::OffsetCompact
-                        }
-                        Format::Iso8601DateTimeFrac => ts.has_frac && ts.suffix == Suffix::None,
-                        Format::Iso8601DateTimeFracUtc => ts.has_frac && ts.suffix == Suffix::UtcZ,
-                        Format::Iso8601DateTimeFracOffset => {
-                            ts.has_frac && ts.suffix == Suffix::OffsetColon
-                        }
-                        Format::Iso8601DateTimeFracOffsetCompact => {
-                            ts.has_frac && ts.suffix == Suffix::OffsetCompact
-                        }
-                        _ => unreachable!(),
+            Format::Standard(std) => std.validates(value),
+            Format::Unix(unix) => unix.validates(value),
+        }
+    }
+}
+
+// ─── StandardFormat Implementation ───────────────────────────────────────────
+
+impl StandardFormat {
+    /// Human-readable label.
+    pub fn name(&self) -> &'static str {
+        match self {
+            StandardFormat::DateOnly { date } => match date {
+                DateFmt::Iso => "ISO 8601 date",
+                DateFmt::SlashUS => "US slash date (mm/dd/yyyy)",
+                DateFmt::SlashEU => "EU slash date (dd/mm/yyyy)",
+                DateFmt::Compact => "Compact date (yyyymmdd)",
+            },
+            StandardFormat::DateTime {
+                date,
+                sep,
+                time,
+                tz,
+            } => {
+                match (date, sep, time, tz) {
+                    // ISO with T separator
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, None) => "ISO 8601 datetime",
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Utc)) => {
+                        "ISO 8601 datetime (UTC Z)"
                     }
-            }
-
-            // ── Space-separated group ───────────────────────────────────────
-            Format::SpaceDateTime | Format::SpaceDateTimeFrac => {
-                let Some(ts) = parse_iso_like(value) else {
-                    return false;
-                };
-                ts.separator == Separator::Space
-                    && ts.suffix == Suffix::None
-                    && match self {
-                        Format::SpaceDateTime => !ts.has_frac,
-                        Format::SpaceDateTimeFrac => ts.has_frac,
-                        _ => unreachable!(),
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Offset)) => {
+                        "ISO 8601 datetime (offset)"
                     }
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::OffsetCompact)) => {
+                        "ISO 8601 datetime (compact offset)"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, None) => {
+                        "ISO 8601 datetime (fractional seconds)"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Utc)) => {
+                        "ISO 8601 datetime (fractional + UTC Z)"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Offset)) => {
+                        "ISO 8601 datetime (fractional + offset)"
+                    }
+                    (
+                        DateFmt::Iso,
+                        Separator::T,
+                        TimeFmt::HmsFrac,
+                        Some(Timezone::OffsetCompact),
+                    ) => "ISO 8601 datetime (fractional + compact offset)",
+                    // ISO with space separator
+                    (DateFmt::Iso, Separator::Space, TimeFmt::Hms, None) => {
+                        "Space-separated datetime"
+                    }
+                    (DateFmt::Iso, Separator::Space, TimeFmt::HmsFrac, None) => {
+                        "Space-separated datetime (fractional seconds)"
+                    }
+                    // Slash datetime
+                    (DateFmt::SlashUS, Separator::Space, TimeFmt::Hms, None) => "US slash datetime",
+                    (DateFmt::SlashEU, Separator::Space, TimeFmt::Hms, None) => "EU slash datetime",
+                    // Compact datetime
+                    (DateFmt::Compact, Separator::T, TimeFmt::HmsCompact, None) => {
+                        "Compact datetime (yyyymmddThhmmss)"
+                    }
+                    // Catch-all for any future combinations
+                    _ => "Standard datetime",
+                }
             }
+        }
+    }
 
-            // ── Date-only ───────────────────────────────────────────────────
-            Format::DateISO => value.len() == 10 && parse_iso_date(value).is_some(),
+    /// Polars-compatible format string.
+    pub fn polars_format(&self) -> &'static str {
+        match self {
+            StandardFormat::DateOnly { date } => match date {
+                DateFmt::Iso => "%Y-%m-%d",
+                DateFmt::SlashUS => "%m/%d/%Y",
+                DateFmt::SlashEU => "%d/%m/%Y",
+                DateFmt::Compact => "%Y%m%d",
+            },
+            StandardFormat::DateTime {
+                date,
+                sep,
+                time,
+                tz,
+            } => {
+                match (date, sep, time, tz) {
+                    // ISO with T separator
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, None) => "%Y-%m-%dT%H:%M:%S",
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Utc)) => {
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Offset)) => {
+                        "%Y-%m-%dT%H:%M:%S%:z"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::OffsetCompact)) => {
+                        "%Y-%m-%dT%H:%M:%S%z"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, None) => "%Y-%m-%dT%H:%M:%S%.f",
+                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Utc)) => {
+                        "%Y-%m-%dT%H:%M:%S%.fZ"
+                    }
+                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Offset)) => {
+                        "%Y-%m-%dT%H:%M:%S%.f%:z"
+                    }
+                    (
+                        DateFmt::Iso,
+                        Separator::T,
+                        TimeFmt::HmsFrac,
+                        Some(Timezone::OffsetCompact),
+                    ) => "%Y-%m-%dT%H:%M:%S%.f%z",
+                    // ISO with space separator
+                    (DateFmt::Iso, Separator::Space, TimeFmt::Hms, None) => "%Y-%m-%d %H:%M:%S",
+                    (DateFmt::Iso, Separator::Space, TimeFmt::HmsFrac, None) => {
+                        "%Y-%m-%d %H:%M:%S%.f"
+                    }
+                    // Slash datetime
+                    (DateFmt::SlashUS, Separator::Space, TimeFmt::Hms, None) => "%m/%d/%Y %H:%M:%S",
+                    (DateFmt::SlashEU, Separator::Space, TimeFmt::Hms, None) => "%d/%m/%Y %H:%M:%S",
+                    // Compact datetime
+                    (DateFmt::Compact, Separator::T, TimeFmt::HmsCompact, None) => "%Y%m%dT%H%M%S",
+                    // Catch-all (shouldn't happen with valid combinations)
+                    _ => "%Y-%m-%dT%H:%M:%S",
+                }
+            }
+        }
+    }
 
-            // ── Slash-separated ─────────────────────────────────────────────
-            Format::DateSlashUS
-            | Format::DateSlashEU
-            | Format::DateTimeSlashUS
-            | Format::DateTimeSlashEU => validate_slash(value, self),
+    /// Validate a value against this standard format.
+    fn validates(&self, value: &str) -> bool {
+        match self {
+            StandardFormat::DateOnly { date } => match date {
+                DateFmt::Iso => value.len() == 10 && parse_iso_date(value).is_some(),
+                DateFmt::SlashUS => validate_slash_date(value, true),
+                DateFmt::SlashEU => validate_slash_date(value, false),
+                DateFmt::Compact => validate_compact_date(value),
+            },
+            StandardFormat::DateTime {
+                date,
+                sep,
+                time,
+                tz,
+            } => {
+                match date {
+                    DateFmt::Iso => {
+                        let Some(parsed) = parse_iso_like(value) else {
+                            return false;
+                        };
+                        // Check separator
+                        let sep_matches = match sep {
+                            Separator::T => parsed.separator == ParsedSeparator::T,
+                            Separator::Space => parsed.separator == ParsedSeparator::Space,
+                        };
+                        if !sep_matches {
+                            return false;
+                        }
+                        // Check fractional
+                        let frac_matches = match time {
+                            TimeFmt::Hms => !parsed.has_frac,
+                            TimeFmt::HmsFrac => parsed.has_frac,
+                            TimeFmt::HmsCompact => return false, // Not valid for ISO date
+                        };
+                        if !frac_matches {
+                            return false;
+                        }
+                        // Check timezone
+                        match (tz, &parsed.suffix) {
+                            (None, ParsedSuffix::None) => true,
+                            (Some(Timezone::Utc), ParsedSuffix::UtcZ) => true,
+                            (Some(Timezone::Offset), ParsedSuffix::OffsetColon) => true,
+                            (Some(Timezone::OffsetCompact), ParsedSuffix::OffsetCompact) => true,
+                            _ => false,
+                        }
+                    }
+                    DateFmt::SlashUS => validate_slash_datetime(value, true),
+                    DateFmt::SlashEU => validate_slash_datetime(value, false),
+                    DateFmt::Compact => {
+                        // Only valid with T separator and compact time
+                        matches!((sep, time, tz), (Separator::T, TimeFmt::HmsCompact, None))
+                            && validate_compact_datetime(value)
+                    }
+                }
+            }
+        }
+    }
+}
 
-            // ── Compact ─────────────────────────────────────────────────────
-            Format::DateCompact => validate_compact_date(value),
-            Format::DateTimeCompact => validate_compact_datetime(value),
+// ─── UnixFormat Implementation ───────────────────────────────────────────────
 
-            // ── Unix epoch ──────────────────────────────────────────────────
-            Format::UnixSeconds
-            | Format::UnixMilliseconds
-            | Format::UnixMicroseconds
-            | Format::UnixNanoseconds => validate_unix(value, self),
+impl UnixFormat {
+    /// Human-readable label.
+    pub fn name(&self) -> &'static str {
+        match self.precision {
+            UnixPrecision::Seconds => "Unix epoch seconds",
+            UnixPrecision::Milliseconds => "Unix epoch milliseconds",
+            UnixPrecision::Microseconds => "Unix epoch microseconds",
+            UnixPrecision::Nanoseconds => "Unix epoch nanoseconds",
+        }
+    }
+
+    /// Polars-compatible format marker.
+    pub fn polars_format(&self) -> &'static str {
+        match self.precision {
+            UnixPrecision::Seconds => "@unix_seconds",
+            UnixPrecision::Milliseconds => "@unix_ms",
+            UnixPrecision::Microseconds => "@unix_us",
+            UnixPrecision::Nanoseconds => "@unix_ns",
+        }
+    }
+
+    /// Validate a value as a Unix timestamp of this precision.
+    fn validates(&self, value: &str) -> bool {
+        let num_str = value.strip_prefix('-').unwrap_or(value);
+
+        if num_str.is_empty() || !num_str.bytes().all(|b| b.is_ascii_digit()) {
+            return false;
+        }
+        // Reject leading zeros (except bare "0", which is < 9 digits anyway).
+        if num_str.len() > 1 && num_str.as_bytes()[0] == b'0' {
+            return false;
+        }
+
+        let digits = num_str.len();
+        match self.precision {
+            UnixPrecision::Seconds => (9..=10).contains(&digits),
+            UnixPrecision::Milliseconds => (11..=13).contains(&digits),
+            UnixPrecision::Microseconds => (14..=16).contains(&digits),
+            UnixPrecision::Nanoseconds => (17..=19).contains(&digits),
         }
     }
 }
@@ -245,20 +542,23 @@ impl Format {
 // ─── Shared Parsing Primitives ───────────────────────────────────────────────
 
 /// Structural description of a parsed ISO-like timestamp.
+/// Internal type used during validation.
 struct IsoStructure {
-    separator: Separator,
+    separator: ParsedSeparator,
     has_frac: bool,
-    suffix: Suffix,
+    suffix: ParsedSuffix,
 }
 
+/// Separator parsed from input (internal).
 #[derive(PartialEq)]
-enum Separator {
+enum ParsedSeparator {
     T,
     Space,
 }
 
+/// Timezone suffix parsed from input (internal).
 #[derive(PartialEq)]
-enum Suffix {
+enum ParsedSuffix {
     None,
     UtcZ,
     /// Offset with colon: `+05:30` or `-08:00`
@@ -280,8 +580,8 @@ fn parse_iso_like(s: &str) -> Option<IsoStructure> {
 
     // Separator at byte 10
     let separator = match s.as_bytes()[10] {
-        b'T' | b't' => Separator::T,
-        b' ' => Separator::Space,
+        b'T' | b't' => ParsedSeparator::T,
+        b' ' => ParsedSeparator::Space,
         _ => return None,
     };
 
@@ -307,20 +607,20 @@ fn parse_iso_like(s: &str) -> Option<IsoStructure> {
 
     // Optional suffix: nothing / Z / ±offset
     let suffix = if pos == s.len() {
-        Suffix::None
+        ParsedSuffix::None
     } else {
         match s.as_bytes()[pos] {
             b'Z' | b'z' => {
                 pos += 1;
-                Suffix::UtcZ
+                ParsedSuffix::UtcZ
             }
             b'+' | b'-' => {
                 let (n, has_colon) = parse_tz_offset(&s[pos..])?;
                 pos += n;
                 if has_colon {
-                    Suffix::OffsetColon
+                    ParsedSuffix::OffsetColon
                 } else {
-                    Suffix::OffsetCompact
+                    ParsedSuffix::OffsetCompact
                 }
             }
             _ => return None,
@@ -394,47 +694,44 @@ fn parse_tz_offset(s: &str) -> Option<(usize, bool)> {
 
 // ─── Slash Date Validation ───────────────────────────────────────────────────
 
-fn validate_slash(s: &str, fmt: &Format) -> bool {
-    // Split on the first space to separate date and optional time.
-    let (date_part, time_part) = match s.find(' ') {
-        Some(pos) => (&s[..pos], Some(&s[pos + 1..])),
-        None => (s, None),
-    };
-
-    // Date must be exactly AA/BB/CCCC  (2 / 2 / 4 digits)
-    if date_part.len() != 10 || date_part.as_bytes()[2] != b'/' || date_part.as_bytes()[5] != b'/' {
-        return false;
+/// Parse slash date parts (AA/BB/CCCC) and return (a, b, year) if valid structure.
+fn parse_slash_date_parts(s: &str) -> Option<(u32, u32, i32)> {
+    if s.len() != 10 || s.as_bytes()[2] != b'/' || s.as_bytes()[5] != b'/' {
+        return None;
     }
+    let a: u32 = s[0..2].parse().ok()?;
+    let b: u32 = s[3..5].parse().ok()?;
+    let year: i32 = s[6..10].parse().ok()?;
+    Some((a, b, year))
+}
 
-    let a: u32 = match date_part[0..2].parse() {
-        Ok(v) => v,
-        Err(_) => return false,
+/// Validate a slash date (no time). `is_us` determines mm/dd/yyyy vs dd/mm/yyyy.
+fn validate_slash_date(s: &str, is_us: bool) -> bool {
+    let Some((a, b, year)) = parse_slash_date_parts(s) else {
+        return false;
     };
-    let b: u32 = match date_part[3..5].parse() {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let year: i32 = match date_part[6..10].parse() {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
+    let (month, day) = if is_us { (a, b) } else { (b, a) };
+    NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
 
-    let (month, day) = match fmt {
-        Format::DateSlashUS | Format::DateTimeSlashUS => (a, b), // mm/dd/yyyy
-        Format::DateSlashEU | Format::DateTimeSlashEU => (b, a), // dd/mm/yyyy
-        _ => unreachable!(),
+/// Validate a slash datetime. `is_us` determines mm/dd/yyyy vs dd/mm/yyyy.
+fn validate_slash_datetime(s: &str, is_us: bool) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
     };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((a, b, year)) = parse_slash_date_parts(date_part) else {
+        return false;
+    };
+    let (month, day) = if is_us { (a, b) } else { (b, a) };
 
     if NaiveDate::from_ymd_opt(year, month, day).is_none() {
         return false;
     }
 
-    let expects_time = matches!(fmt, Format::DateTimeSlashUS | Format::DateTimeSlashEU);
-    match (expects_time, time_part) {
-        (true, Some(t)) => t.len() == 8 && parse_hms(t).is_some(),
-        (false, None) => true,
-        _ => false,
-    }
+    time_part.len() == 8 && parse_hms(time_part).is_some()
 }
 
 // ─── Compact Date / Datetime Validation ──────────────────────────────────────
@@ -466,42 +763,6 @@ fn validate_compact_datetime(s: &str) -> bool {
     let m: u32 = time[2..4].parse().unwrap();
     let sec: u32 = time[4..6].parse().unwrap();
     h <= 23 && m <= 59 && sec <= 59
-}
-
-// ─── Unix Epoch Validation ───────────────────────────────────────────────────
-//
-// Digit-count ranges are deliberately non-overlapping so that the CSP engine
-// can discriminate between epoch units without ambiguity:
-//
-// | Variant           | Digits  | Approx. date range          |
-// |-------------------|---------|-----------------------------|
-// | UnixSeconds       | 9–10    | 1973-03-03 … 2286-11-20    |
-// | UnixMilliseconds  | 11–13   | 1970     … 2286 (ms)       |
-// | UnixMicroseconds  | 14–16   | 1970     … 2286 (µs)       |
-// | UnixNanoseconds   | 17–19   | 1677     … 2262 (ns i64)   |
-//
-// Values with 1–8 digits do NOT match any Unix variant.  8-digit numeric
-// strings are handled exclusively by DateCompact (if valid YYYYMMDD).
-
-fn validate_unix(s: &str, fmt: &Format) -> bool {
-    let num_str = s.strip_prefix('-').unwrap_or(s);
-
-    if num_str.is_empty() || !num_str.bytes().all(|b| b.is_ascii_digit()) {
-        return false;
-    }
-    // Reject leading zeros (except bare "0", which is < 9 digits anyway).
-    if num_str.len() > 1 && num_str.as_bytes()[0] == b'0' {
-        return false;
-    }
-
-    let digits = num_str.len();
-    match fmt {
-        Format::UnixSeconds => (9..=10).contains(&digits),
-        Format::UnixMilliseconds => (11..=13).contains(&digits),
-        Format::UnixMicroseconds => (14..=16).contains(&digits),
-        Format::UnixNanoseconds => (17..=19).contains(&digits),
-        _ => unreachable!(),
-    }
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ The inference engine treats each candidate timestamp format as a variable in a
 Constraint Satisfaction Problem (CSP). Each cell value in the column acts as a
 constraint that narrows the candidate set:
 
-1. **Initialise** – start with all 19 known formats as candidates.
+1. **Initialise** – start with all 21 known formats as candidates.
 2. **Propagate** – for each non-null cell, eliminate every format that cannot
    parse that value.
 3. **Early exit** (default) – as soon as a single format remains, return it
@@ -26,27 +26,29 @@ data) and flexible (use `exhaustive=True` to validate the _entire_ column).
 
 ## Supported formats
 
-| Family                | Example                            | Polars format string      |
-| --------------------- | ---------------------------------- | ------------------------- |
-| ISO 8601 datetime     | `2024-01-15T10:30:00`              | `%Y-%m-%dT%H:%M:%S`       |
-| ISO 8601 + UTC        | `2024-01-15T10:30:00Z`             | `%Y-%m-%dT%H:%M:%SZ`      |
-| ISO 8601 + offset     | `2024-01-15T10:30:00+05:30`        | `%Y-%m-%dT%H:%M:%S%:z`    |
-| ISO 8601 + frac       | `2024-01-15T10:30:00.123456`       | `%Y-%m-%dT%H:%M:%S%.f`    |
-| ISO 8601 + frac + UTC | `2024-01-15T10:30:00.123456Z`      | `%Y-%m-%dT%H:%M:%S%.fZ`   |
-| ISO 8601 + frac + tz  | `2024-01-15T10:30:00.123456+05:30` | `%Y-%m-%dT%H:%M:%S%.f%:z` |
-| Space datetime        | `2024-01-15 10:30:00`              | `%Y-%m-%d %H:%M:%S`       |
-| Space datetime + frac | `2024-01-15 10:30:00.123456`       | `%Y-%m-%d %H:%M:%S%.f`    |
-| Date only (ISO)       | `2024-01-15`                       | `%Y-%m-%d`                |
-| US slash date         | `01/15/2024`                       | `%m/%d/%Y`                |
-| EU slash date         | `15/01/2024`                       | `%d/%m/%Y`                |
-| US slash datetime     | `01/15/2024 10:30:00`              | `%m/%d/%Y %H:%M:%S`       |
-| EU slash datetime     | `15/01/2024 10:30:00`              | `%d/%m/%Y %H:%M:%S`       |
-| Compact date          | `20240115`                         | `%Y%m%d`                  |
-| Compact datetime      | `20240115T103000`                  | `%Y%m%dT%H%M%S`           |
-| Unix seconds          | `1705312200`                       | `@unix_seconds`           |
-| Unix milliseconds     | `1705312200000`                    | `@unix_ms`                |
-| Unix microseconds     | `1705312200000000`                 | `@unix_us`                |
-| Unix nanoseconds      | `1705312200000000000`              | `@unix_ns`                |
+| Family                       | Example                            | Polars format string      |
+| ---------------------------- | ---------------------------------- | ------------------------- |
+| ISO 8601 datetime            | `2024-01-15T10:30:00`              | `%Y-%m-%dT%H:%M:%S`       |
+| ISO 8601 + UTC               | `2024-01-15T10:30:00Z`             | `%Y-%m-%dT%H:%M:%SZ`      |
+| ISO 8601 + offset            | `2024-01-15T10:30:00+05:30`        | `%Y-%m-%dT%H:%M:%S%:z`    |
+| ISO 8601 + compact offset    | `2024-01-15T10:30:00+0530`         | `%Y-%m-%dT%H:%M:%S%z`     |
+| ISO 8601 + frac              | `2024-01-15T10:30:00.123456`       | `%Y-%m-%dT%H:%M:%S%.f`    |
+| ISO 8601 + frac + UTC        | `2024-01-15T10:30:00.123456Z`      | `%Y-%m-%dT%H:%M:%S%.fZ`   |
+| ISO 8601 + frac + offset     | `2024-01-15T10:30:00.123456+05:30` | `%Y-%m-%dT%H:%M:%S%.f%:z` |
+| ISO 8601 + frac + compact tz | `2024-01-15T10:30:00.123456+0530`  | `%Y-%m-%dT%H:%M:%S%.f%z`  |
+| Space datetime               | `2024-01-15 10:30:00`              | `%Y-%m-%d %H:%M:%S`       |
+| Space datetime + frac        | `2024-01-15 10:30:00.123456`       | `%Y-%m-%d %H:%M:%S%.f`    |
+| Date only (ISO)              | `2024-01-15`                       | `%Y-%m-%d`                |
+| US slash date                | `01/15/2024`                       | `%m/%d/%Y`                |
+| EU slash date                | `15/01/2024`                       | `%d/%m/%Y`                |
+| US slash datetime            | `01/15/2024 10:30:00`              | `%m/%d/%Y %H:%M:%S`       |
+| EU slash datetime            | `15/01/2024 10:30:00`              | `%d/%m/%Y %H:%M:%S`       |
+| Compact date                 | `20240115`                         | `%Y%m%d`                  |
+| Compact datetime             | `20240115T103000`                  | `%Y%m%dT%H%M%S`           |
+| Unix seconds                 | `1705312200`                       | `@unix_seconds`           |
+| Unix milliseconds            | `1705312200000`                    | `@unix_ms`                |
+| Unix microseconds            | `1705312200000000`                 | `@unix_us`                |
+| Unix nanoseconds             | `1705312200000000000`              | `@unix_ns`                |
 
 ### Unix epoch digit-count ranges
 
@@ -62,6 +64,29 @@ discriminate between units without ambiguity:
 
 Values with 1–8 digits do not match any Unix variant; 8-digit numeric strings
 are handled exclusively by `DateCompact` (if the digits form a valid date).
+
+### Architecture: Compositional format design
+
+Internally, formats are represented using a compositional structure rather than
+a flat enum. This makes adding new format variants much easier:
+
+```
+Format
+├── Standard(StandardFormat)
+│   ├── DateOnly { date: DateFmt }
+│   └── DateTime { date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone> }
+└── Unix(UnixFormat { precision: UnixPrecision })
+
+Components:
+  DateFmt:       Iso | SlashUS | SlashEU | Compact
+  Separator:     T | Space
+  TimeFmt:       Hms | HmsFrac | HmsCompact
+  Timezone:      Utc | Offset | OffsetCompact
+  UnixPrecision: Seconds | Milliseconds | Microseconds | Nanoseconds
+```
+
+Adding a new timezone format (e.g., named timezones) requires adding one
+`Timezone` variant instead of duplicating across all datetime combinations.
 
 ## Installation
 
