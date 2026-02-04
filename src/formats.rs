@@ -21,14 +21,18 @@ pub enum Format {
     Iso8601DateTime,
     /// `2024-01-15T10:30:00Z`
     Iso8601DateTimeUtc,
-    /// `2024-01-15T10:30:00+05:30`
+    /// `2024-01-15T10:30:00+05:30` (colon in offset)
     Iso8601DateTimeOffset,
+    /// `2024-01-15T10:30:00+0530` (compact offset, no colon)
+    Iso8601DateTimeOffsetCompact,
     /// `2024-01-15T10:30:00.123456`
     Iso8601DateTimeFrac,
     /// `2024-01-15T10:30:00.123456Z`
     Iso8601DateTimeFracUtc,
-    /// `2024-01-15T10:30:00.123456+05:30`
+    /// `2024-01-15T10:30:00.123456+05:30` (colon in offset)
     Iso8601DateTimeFracOffset,
+    /// `2024-01-15T10:30:00.123456+0530` (compact offset, no colon)
+    Iso8601DateTimeFracOffsetCompact,
 
     // ── Space-separated ─────────────────────────────────────────────────────
     /// `2024-01-15 10:30:00`
@@ -74,9 +78,11 @@ impl Format {
             Format::Iso8601DateTime,
             Format::Iso8601DateTimeUtc,
             Format::Iso8601DateTimeOffset,
+            Format::Iso8601DateTimeOffsetCompact,
             Format::Iso8601DateTimeFrac,
             Format::Iso8601DateTimeFracUtc,
             Format::Iso8601DateTimeFracOffset,
+            Format::Iso8601DateTimeFracOffsetCompact,
             Format::SpaceDateTime,
             Format::SpaceDateTimeFrac,
             Format::DateISO,
@@ -99,9 +105,13 @@ impl Format {
             Format::Iso8601DateTime => "ISO 8601 datetime",
             Format::Iso8601DateTimeUtc => "ISO 8601 datetime (UTC Z)",
             Format::Iso8601DateTimeOffset => "ISO 8601 datetime (offset)",
+            Format::Iso8601DateTimeOffsetCompact => "ISO 8601 datetime (compact offset)",
             Format::Iso8601DateTimeFrac => "ISO 8601 datetime (fractional seconds)",
             Format::Iso8601DateTimeFracUtc => "ISO 8601 datetime (fractional + UTC Z)",
             Format::Iso8601DateTimeFracOffset => "ISO 8601 datetime (fractional + offset)",
+            Format::Iso8601DateTimeFracOffsetCompact => {
+                "ISO 8601 datetime (fractional + compact offset)"
+            }
             Format::SpaceDateTime => "Space-separated datetime",
             Format::SpaceDateTimeFrac => "Space-separated datetime (fractional seconds)",
             Format::DateISO => "ISO 8601 date",
@@ -127,9 +137,11 @@ impl Format {
             Format::Iso8601DateTime => "%Y-%m-%dT%H:%M:%S",
             Format::Iso8601DateTimeUtc => "%Y-%m-%dT%H:%M:%SZ",
             Format::Iso8601DateTimeOffset => "%Y-%m-%dT%H:%M:%S%:z",
+            Format::Iso8601DateTimeOffsetCompact => "%Y-%m-%dT%H:%M:%S%z",
             Format::Iso8601DateTimeFrac => "%Y-%m-%dT%H:%M:%S%.f",
             Format::Iso8601DateTimeFracUtc => "%Y-%m-%dT%H:%M:%S%.fZ",
             Format::Iso8601DateTimeFracOffset => "%Y-%m-%dT%H:%M:%S%.f%:z",
+            Format::Iso8601DateTimeFracOffsetCompact => "%Y-%m-%dT%H:%M:%S%.f%z",
             Format::SpaceDateTime => "%Y-%m-%d %H:%M:%S",
             Format::SpaceDateTimeFrac => "%Y-%m-%d %H:%M:%S%.f",
             Format::DateISO => "%Y-%m-%d",
@@ -164,9 +176,11 @@ impl Format {
             Format::Iso8601DateTime
             | Format::Iso8601DateTimeUtc
             | Format::Iso8601DateTimeOffset
+            | Format::Iso8601DateTimeOffsetCompact
             | Format::Iso8601DateTimeFrac
             | Format::Iso8601DateTimeFracUtc
-            | Format::Iso8601DateTimeFracOffset => {
+            | Format::Iso8601DateTimeFracOffset
+            | Format::Iso8601DateTimeFracOffsetCompact => {
                 let Some(ts) = parse_iso_like(value) else {
                     return false;
                 };
@@ -175,12 +189,18 @@ impl Format {
                         Format::Iso8601DateTime => !ts.has_frac && ts.suffix == Suffix::None,
                         Format::Iso8601DateTimeUtc => !ts.has_frac && ts.suffix == Suffix::UtcZ,
                         Format::Iso8601DateTimeOffset => {
-                            !ts.has_frac && ts.suffix == Suffix::Offset
+                            !ts.has_frac && ts.suffix == Suffix::OffsetColon
+                        }
+                        Format::Iso8601DateTimeOffsetCompact => {
+                            !ts.has_frac && ts.suffix == Suffix::OffsetCompact
                         }
                         Format::Iso8601DateTimeFrac => ts.has_frac && ts.suffix == Suffix::None,
                         Format::Iso8601DateTimeFracUtc => ts.has_frac && ts.suffix == Suffix::UtcZ,
                         Format::Iso8601DateTimeFracOffset => {
-                            ts.has_frac && ts.suffix == Suffix::Offset
+                            ts.has_frac && ts.suffix == Suffix::OffsetColon
+                        }
+                        Format::Iso8601DateTimeFracOffsetCompact => {
+                            ts.has_frac && ts.suffix == Suffix::OffsetCompact
                         }
                         _ => unreachable!(),
                     }
@@ -241,7 +261,10 @@ enum Separator {
 enum Suffix {
     None,
     UtcZ,
-    Offset,
+    /// Offset with colon: `+05:30` or `-08:00`
+    OffsetColon,
+    /// Compact offset without colon: `+0530` or `-0800`
+    OffsetCompact,
 }
 
 /// Parse a `YYYY-MM-DD[T| ]HH:MM:SS[.f…][Z|±HH:MM]` string and return its
@@ -292,9 +315,13 @@ fn parse_iso_like(s: &str) -> Option<IsoStructure> {
                 Suffix::UtcZ
             }
             b'+' | b'-' => {
-                let n = parse_tz_offset(&s[pos..])?;
+                let (n, has_colon) = parse_tz_offset(&s[pos..])?;
                 pos += n;
-                Suffix::Offset
+                if has_colon {
+                    Suffix::OffsetColon
+                } else {
+                    Suffix::OffsetCompact
+                }
             }
             _ => return None,
         }
@@ -337,8 +364,9 @@ fn parse_hms(s: &str) -> Option<()> {
     Some(())
 }
 
-/// Parse a timezone offset `±HH:MM` or `±HHMM`.  Returns the byte length consumed.
-fn parse_tz_offset(s: &str) -> Option<usize> {
+/// Parse a timezone offset `±HH:MM` or `±HHMM`.
+/// Returns `(bytes_consumed, has_colon)` where `has_colon` is true for `±HH:MM` format.
+fn parse_tz_offset(s: &str) -> Option<(usize, bool)> {
     if s.len() < 5 || (s.as_bytes()[0] != b'+' && s.as_bytes()[0] != b'-') {
         return None;
     }
@@ -348,19 +376,19 @@ fn parse_tz_offset(s: &str) -> Option<usize> {
     }
 
     if s.len() >= 6 && s.as_bytes()[3] == b':' {
-        // ±HH:MM
+        // ±HH:MM (with colon)
         let m: u32 = s[4..6].parse().ok()?;
         if m > 59 {
             return None;
         }
-        Some(6)
+        Some((6, true))
     } else {
-        // ±HHMM
+        // ±HHMM (compact, no colon)
         let m: u32 = s[3..5].parse().ok()?;
         if m > 59 {
             return None;
         }
-        Some(5)
+        Some((5, false))
     }
 }
 
@@ -538,12 +566,23 @@ mod tests {
 
     #[test]
     fn iso8601_offset_without_colon() {
-        assert_only("2024-01-15T10:30:00+0530", Format::Iso8601DateTimeOffset);
+        assert_only(
+            "2024-01-15T10:30:00+0530",
+            Format::Iso8601DateTimeOffsetCompact,
+        );
     }
 
     #[test]
     fn iso8601_negative_offset() {
         assert_only("2024-01-15T10:30:00-08:00", Format::Iso8601DateTimeOffset);
+    }
+
+    #[test]
+    fn iso8601_negative_offset_compact() {
+        assert_only(
+            "2024-01-15T10:30:00-0800",
+            Format::Iso8601DateTimeOffsetCompact,
+        );
     }
 
     #[test]
@@ -564,6 +603,14 @@ mod tests {
         assert_only(
             "2024-01-15T10:30:00.123456+05:30",
             Format::Iso8601DateTimeFracOffset,
+        );
+    }
+
+    #[test]
+    fn iso8601_frac_offset_compact() {
+        assert_only(
+            "2024-01-15T10:30:00.123456+0530",
+            Format::Iso8601DateTimeFracOffsetCompact,
         );
     }
 

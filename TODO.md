@@ -45,8 +45,10 @@ later sections depend on earlier ones being solid.
 
 ## v0.2 – Polars format string verification
 
-- [ ] Verify `%:z` offset parsing works in Polars `str.to_datetime`
-  - If Polars uses `%z` (no colon) instead, update `polars_format()` accordingly
+- [x] Verify `%:z` offset parsing works in Polars `str.to_datetime`
+  - Both `%:z` (colon) and `%z` (no colon) work in Polars
+  - Split offset formats into colon (`+05:30` → `%:z`) and compact (`+0530` → `%z`) variants
+  - Added `Iso8601DateTimeOffsetCompact` and `Iso8601DateTimeFracOffsetCompact` formats
 - [ ] Verify `%.f` fractional-second handling in Polars
   - Polars may require fixed-width specifiers like `%.3f` / `%.6f` / `%.9f`
   - If so, add fractional-precision detection to the validator and the format enum
