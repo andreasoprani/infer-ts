@@ -63,10 +63,12 @@ pub fn infer(values: &[Option<&str>], exhaustive: bool) -> Vec<Format> {
         }
     }
 
-    // Return all surviving candidates sorted by name for deterministic output
-    let mut result: Vec<Format> = candidates.into_iter().collect();
-    result.sort_by_key(|f| f.name());
-    result
+    // Return surviving candidates in enum definition order (as defined in Format::all())
+    Format::all()
+        .iter()
+        .filter(|f| candidates.contains(f))
+        .copied()
+        .collect()
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
