@@ -334,10 +334,6 @@ impl StandardFormat {
                         if !sep_matches {
                             return false;
                         }
-                        // Space-separated formats don't support timezones
-                        if matches!(sep, Separator::Space) && tz.is_some() {
-                            return false;
-                        }
                         // Check fractional
                         let frac_matches = match time {
                             TimeFmt::Hms => !parsed.has_frac,
@@ -804,9 +800,38 @@ mod tests {
     }
 
     #[test]
-    fn space_with_tz_rejected() {
-        // Space + timezone is not a supported variant (yet)
-        assert_none("2024-01-15 10:30:00+05:30");
+    fn space_utc() {
+        assert_only("2024-01-15 10:30:00Z", std(Iso, Space, Hms, Some(Utc)));
+    }
+
+    #[test]
+    fn space_offset() {
+        assert_only("2024-01-15 10:30:00+05:30", std(Iso, Space, Hms, Some(Offset)));
+    }
+
+    #[test]
+    fn space_offset_compact() {
+        assert_only("2024-01-15 10:30:00+0530", std(Iso, Space, Hms, Some(OffsetCompact)));
+    }
+
+    #[test]
+    fn space_frac_utc() {
+        assert_only("2024-01-15 10:30:00.123Z", std(Iso, Space, HmsFrac, Some(Utc)));
+    }
+
+    #[test]
+    fn space_frac_offset() {
+        assert_only("2024-01-15 10:30:00.123+05:30", std(Iso, Space, HmsFrac, Some(Offset)));
+    }
+
+    #[test]
+    fn space_frac_offset_compact() {
+        assert_only("2024-01-15 10:30:00.123+0530", std(Iso, Space, HmsFrac, Some(OffsetCompact)));
+    }
+
+    #[test]
+    fn space_negative_offset() {
+        assert_only("2024-01-15 10:30:00-08:00", std(Iso, Space, Hms, Some(Offset)));
     }
 
     // ── Date-only ISO ───────────────────────────────────────────────────────

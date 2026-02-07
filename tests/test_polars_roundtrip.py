@@ -120,6 +120,61 @@ class TestSpaceSeparated:
 
         assert result.dtype == pl.Datetime
 
+    def test_space_utc(self):
+        s = pl.Series("ts", ["2024-01-15 10:30:00Z", "2024-06-20 08:00:00Z"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_space_offset(self):
+        s = pl.Series(
+            "ts", ["2024-01-15 10:30:00+05:30", "2024-06-20 08:00:00-08:00"]
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_space_offset_compact(self):
+        s = pl.Series(
+            "ts", ["2024-01-15 10:30:00+0530", "2024-06-20 08:00:00-0800"]
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_space_fractional_utc(self):
+        s = pl.Series(
+            "ts", ["2024-01-15 10:30:00.123Z", "2024-06-20 08:00:00.456789Z"]
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_space_fractional_offset(self):
+        s = pl.Series(
+            "ts",
+            [
+                "2024-01-15 10:30:00.123+05:30",
+                "2024-06-20 08:00:00.456789-08:00",
+            ],
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_space_fractional_offset_compact(self):
+        s = pl.Series(
+            "ts",
+            [
+                "2024-01-15 10:30:00.123+0530",
+                "2024-06-20 08:00:00.456789-0800",
+            ],
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
 
 # ─── Slash dates (US/EU) ──────────────────────────────────────────────────────
 
@@ -256,6 +311,25 @@ class TestEdgeCases:
 
         fmts = infer_ts.infer_format(["2024-01-15T10:30:00+0530"])
         assert fmts == ["%Y-%m-%dT%H:%M:%S%z"]
+
+        # Space-separated with timezone
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00Z"])
+        assert fmts == ["%Y-%m-%d %H:%M:%SZ"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00+05:30"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S%:z"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00+0530"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S%z"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00.123Z"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S%.fZ"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00.123+05:30"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S%.f%:z"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00.123+0530"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S%.f%z"]
 
 
 # ─── to_datetime API tests ───────────────────────────────────────────────────

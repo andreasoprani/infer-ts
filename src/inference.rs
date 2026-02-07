@@ -168,6 +168,30 @@ mod tests {
     }
 
     #[test]
+    fn infer_space_utc() {
+        assert_eq!(
+            infer(&vals(&["2024-01-15 10:30:00Z"]), false),
+            vec![std(Iso, Space, Hms, Some(Utc))]
+        );
+    }
+
+    #[test]
+    fn infer_space_offset() {
+        assert_eq!(
+            infer(&vals(&["2024-01-15 10:30:00+05:30"]), false),
+            vec![std(Iso, Space, Hms, Some(Offset))]
+        );
+    }
+
+    #[test]
+    fn infer_space_frac_utc() {
+        assert_eq!(
+            infer(&vals(&["2024-01-15 10:30:00.123Z"]), false),
+            vec![std(Iso, Space, HmsFrac, Some(Utc))]
+        );
+    }
+
+    #[test]
     fn infer_date_iso() {
         assert_eq!(
             infer(&vals(&["2024-01-15", "2024-06-20"]), false),
@@ -379,6 +403,12 @@ mod tests {
     fn early_exit_iso8601_frac_utc() {
         let input = vals(&["2024-01-15T10:30:00.123Z", "GARBAGE"]);
         assert_eq!(infer(&input, false), vec![std(Iso, T, HmsFrac, Some(Utc))]);
+    }
+
+    #[test]
+    fn early_exit_space_offset() {
+        let input = vals(&["2024-01-15 10:30:00+05:30", "GARBAGE"]);
+        assert_eq!(infer(&input, false), vec![std(Iso, Space, Hms, Some(Offset))]);
     }
 
     #[test]
