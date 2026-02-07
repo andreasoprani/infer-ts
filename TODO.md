@@ -25,10 +25,11 @@ later sections depend on earlier ones being solid.
   - Removed named constants — tests use helper functions instead
   - Adding a new date family now requires only: add variant, implement `polars_date()` fragment,
     update validator to check combination validity
-- [ ] Verify `%.f` fractional-second handling in Polars
-  - Polars may require fixed-width specifiers like `%.3f` / `%.6f` / `%.9f`
-  - If so, add fractional-precision detection to the validator and the format enum
-- [ ] Write a Python convenience wrapper that handles the `@unix_*` markers
+- [x] Verify `%.f` fractional-second handling in Polars
+  - `%.f` works correctly with 1–9 fractional digits and mixed precisions in one column
+  - 9-digit values truncate to microseconds (Polars' default Datetime resolution) — expected
+  - No fixed-width specifiers needed; no changes required
+- [x] Write a Python convenience wrapper that handles the `@unix_*` markers
       transparently – takes a Polars Series and returns a cast Series regardless of
       whether the inferred format is string-based or epoch-based
 

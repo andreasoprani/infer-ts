@@ -4,7 +4,8 @@ build-backend = "maturin"
 
 [tool.maturin]
 features = ["pyo3/abi3"]
-module-name = "infer_ts"
+module-name = "infer_ts._infer_ts"
+python-source = "python"
 strip = true
 
 [project]
@@ -23,3 +24,6 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = ["polars", "pytest"]
+
+[tool.pyright]
+extraPaths = ["python"]

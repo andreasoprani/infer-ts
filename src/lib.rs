@@ -82,7 +82,7 @@ fn supported_formats() -> Vec<String> {
 }
 
 #[pymodule]
-fn infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(infer_format, m)?)?;
     m.add_function(wrap_pyfunction!(supported_formats, m)?)?;
     m.add("__version__", "0.1.0")?;
