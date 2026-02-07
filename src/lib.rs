@@ -59,25 +59,25 @@ fn infer_format(values: Vec<Option<String>>, exhaustive: bool) -> Vec<String> {
     let formats = inference::infer(&refs, exhaustive);
     formats
         .iter()
-        .map(|f| f.polars_format().to_string())
+        .map(|f| f.polars_format())
         .collect()
 }
 
-/// Return all supported timestamp formats as ``(name, polars_format)`` pairs.
+/// Return all supported Polars-compatible format strings.
 ///
 /// Useful for introspection and documentation.
 ///
 /// Example (Python):
 /// ```python
 /// import infer_ts
-/// for name, fmt in infer_ts.supported_formats():
-///     print(f"{name:45} → {fmt}")
+/// for fmt in infer_ts.supported_formats():
+///     print(fmt)
 /// ```
 #[pyfunction]
-fn supported_formats() -> Vec<(String, String)> {
+fn supported_formats() -> Vec<String> {
     formats::Format::all()
         .iter()
-        .map(|f| (f.name().to_string(), f.polars_format().to_string()))
+        .map(|f| f.polars_format())
         .collect()
 }
 

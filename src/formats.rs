@@ -15,6 +15,8 @@
 //!
 //! - **Unix formats** are bare integers distinguished by digit count.
 
+use std::sync::OnceLock;
+
 use chrono::NaiveDate;
 
 // ─── Component Enums ─────────────────────────────────────────────────────────
@@ -76,6 +78,105 @@ pub enum UnixPrecision {
     Nanoseconds,
 }
 
+// ─── Component Constraints & Fragments ──────────────────────────────────────
+//
+// Each component knows (a) which other components it is valid with and (b) how
+// to contribute its fragment to a Polars format string.
+// `StandardFormat::all_valid()` drives the nested iteration; adding a new variant
+// to any component enum and filling in these methods is all that is needed to
+// include every valid combination in the format list.
+
+impl DateFmt {
+    /// All date formats, in definition order.
+    const fn all() -> &'static [DateFmt] {
+        &[DateFmt::Iso, DateFmt::SlashUS, DateFmt::SlashEU, DateFmt::Compact]
+    }
+
+    /// Which separators are valid with this date format.
+    fn valid_separators(&self) -> &'static [Separator] {
+        match self {
+            DateFmt::Iso => &[Separator::T, Separator::Space],
+            DateFmt::SlashUS | DateFmt::SlashEU => &[Separator::Space],
+            DateFmt::Compact => &[Separator::T],
+        }
+    }
+
+    /// Which time formats are valid with this date format.
+    fn valid_time_formats(&self) -> &'static [TimeFmt] {
+        match self {
+            DateFmt::Iso => &[TimeFmt::Hms, TimeFmt::HmsFrac],
+            DateFmt::SlashUS | DateFmt::SlashEU => &[TimeFmt::Hms],
+            DateFmt::Compact => &[TimeFmt::HmsCompact],
+        }
+    }
+
+    /// Which timezone options are valid with this date format and separator.
+    /// Only ISO + T supports timezone suffixes; space-separated and slash/compact
+    /// formats do not.
+    fn valid_timezones(&self, sep: &Separator) -> &'static [Option<Timezone>] {
+        match (self, sep) {
+            (DateFmt::Iso, Separator::T) => {
+                &[None, Some(Timezone::Utc), Some(Timezone::Offset), Some(Timezone::OffsetCompact)]
+            }
+            _ => &[None],
+        }
+    }
+
+    /// Polars date fragment.
+    fn polars_date(&self) -> &'static str {
+        match self {
+            DateFmt::Iso => "%Y-%m-%d",
+            DateFmt::SlashUS => "%m/%d/%Y",
+            DateFmt::SlashEU => "%d/%m/%Y",
+            DateFmt::Compact => "%Y%m%d",
+        }
+    }
+}
+
+impl Separator {
+    /// Polars separator fragment.
+    fn polars_sep(&self) -> &'static str {
+        match self {
+            Separator::T => "T",
+            Separator::Space => " ",
+        }
+    }
+}
+
+impl TimeFmt {
+    /// Polars time fragment.
+    fn polars_time(&self) -> &'static str {
+        match self {
+            TimeFmt::Hms => "%H:%M:%S",
+            TimeFmt::HmsFrac => "%H:%M:%S%.f",
+            TimeFmt::HmsCompact => "%H%M%S",
+        }
+    }
+}
+
+impl Timezone {
+    /// Polars timezone fragment.
+    fn polars_tz(&self) -> &'static str {
+        match self {
+            Timezone::Utc => "Z",
+            Timezone::Offset => "%:z",
+            Timezone::OffsetCompact => "%z",
+        }
+    }
+}
+
+impl UnixPrecision {
+    /// All precisions, in definition order.
+    const fn all() -> &'static [UnixPrecision] {
+        &[
+            UnixPrecision::Seconds,
+            UnixPrecision::Milliseconds,
+            UnixPrecision::Microseconds,
+            UnixPrecision::Nanoseconds,
+        ]
+    }
+}
+
 // ─── Standard Format ─────────────────────────────────────────────────────────
 
 /// A standard datetime format composed of date, optional time, and optional timezone.
@@ -121,7 +222,7 @@ pub enum Format {
 //
 // These provide backwards-compatible names for the 21 standard formats.
 
-#[allow(non_upper_case_globals)]
+#[allow(non_upper_case_globals, dead_code)]
 impl Format {
     // ISO 8601 (T separator)
     pub const Iso8601DateTime: Format = Format::Standard(StandardFormat::DateTime {
@@ -238,57 +339,36 @@ impl Format {
 }
 
 impl Format {
-    /// Every supported format in a fixed, deterministic order.
+    /// Every supported format, generated from component constraints.
     ///
-    /// The order matches the original flat enum for backwards compatibility.
+    /// Lazily initialised once via [`OnceLock`]; subsequent calls return the
+    /// same slice.  Adding a new component variant and wiring its constraints
+    /// in the `DateFmt` / `Separator` / … impls is sufficient to include every
+    /// valid combination automatically.
     pub fn all() -> &'static [Format] {
-        &[
-            // ISO 8601 (T separator)
-            Format::Iso8601DateTime,
-            Format::Iso8601DateTimeUtc,
-            Format::Iso8601DateTimeOffset,
-            Format::Iso8601DateTimeOffsetCompact,
-            Format::Iso8601DateTimeFrac,
-            Format::Iso8601DateTimeFracUtc,
-            Format::Iso8601DateTimeFracOffset,
-            Format::Iso8601DateTimeFracOffsetCompact,
-            // Space-separated
-            Format::SpaceDateTime,
-            Format::SpaceDateTimeFrac,
-            // Date-only
-            Format::DateISO,
-            Format::DateSlashUS,
-            Format::DateSlashEU,
-            // Slash datetime
-            Format::DateTimeSlashUS,
-            Format::DateTimeSlashEU,
-            // Compact
-            Format::DateCompact,
-            Format::DateTimeCompact,
-            // Unix epoch
-            Format::UnixSeconds,
-            Format::UnixMilliseconds,
-            Format::UnixMicroseconds,
-            Format::UnixNanoseconds,
-        ]
-    }
-
-    /// Human-readable label.
-    pub fn name(&self) -> &'static str {
-        match self {
-            Format::Standard(std) => std.name(),
-            Format::Unix(unix) => unix.name(),
-        }
+        static FORMATS: OnceLock<Vec<Format>> = OnceLock::new();
+        FORMATS.get_or_init(|| {
+            let mut formats: Vec<Format> = StandardFormat::all_valid()
+                .into_iter()
+                .map(Format::Standard)
+                .collect();
+            for precision in UnixPrecision::all() {
+                formats.push(Format::Unix(UnixFormat {
+                    precision: *precision,
+                }));
+            }
+            formats
+        })
     }
 
     /// Polars-compatible format string for `Expr.str.to_datetime(format=...)`.
     ///
     /// Unix epoch formats return a special `@`-prefixed marker because Polars
     /// handles them via integer casting, not format-string parsing.
-    pub fn polars_format(&self) -> &'static str {
+    pub fn polars_format(&self) -> String {
         match self {
             Format::Standard(std) => std.polars_format(),
-            Format::Unix(unix) => unix.polars_format(),
+            Format::Unix(unix) => unix.polars_format().to_string(),
         }
     }
 
@@ -315,122 +395,42 @@ impl Format {
 // ─── StandardFormat Implementation ───────────────────────────────────────────
 
 impl StandardFormat {
-    /// Human-readable label.
-    pub fn name(&self) -> &'static str {
-        match self {
-            StandardFormat::DateOnly { date } => match date {
-                DateFmt::Iso => "ISO 8601 date",
-                DateFmt::SlashUS => "US slash date (mm/dd/yyyy)",
-                DateFmt::SlashEU => "EU slash date (dd/mm/yyyy)",
-                DateFmt::Compact => "Compact date (yyyymmdd)",
-            },
-            StandardFormat::DateTime {
-                date,
-                sep,
-                time,
-                tz,
-            } => {
-                match (date, sep, time, tz) {
-                    // ISO with T separator
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, None) => "ISO 8601 datetime",
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Utc)) => {
-                        "ISO 8601 datetime (UTC Z)"
+    /// Generate all valid format combinations by iterating over component
+    /// constraints.  Extending the set of supported formats only requires
+    /// adding a variant to one of the component enums and wiring its
+    /// `valid_*` / fragment methods — no manual enumeration here.
+    fn all_valid() -> Vec<StandardFormat> {
+        let mut formats = Vec::new();
+        for date in DateFmt::all() {
+            formats.push(StandardFormat::DateOnly { date: *date });
+            for sep in date.valid_separators() {
+                for time in date.valid_time_formats() {
+                    for tz in date.valid_timezones(sep) {
+                        formats.push(StandardFormat::DateTime {
+                            date: *date,
+                            sep: *sep,
+                            time: *time,
+                            tz: *tz,
+                        });
                     }
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Offset)) => {
-                        "ISO 8601 datetime (offset)"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::OffsetCompact)) => {
-                        "ISO 8601 datetime (compact offset)"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, None) => {
-                        "ISO 8601 datetime (fractional seconds)"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Utc)) => {
-                        "ISO 8601 datetime (fractional + UTC Z)"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Offset)) => {
-                        "ISO 8601 datetime (fractional + offset)"
-                    }
-                    (
-                        DateFmt::Iso,
-                        Separator::T,
-                        TimeFmt::HmsFrac,
-                        Some(Timezone::OffsetCompact),
-                    ) => "ISO 8601 datetime (fractional + compact offset)",
-                    // ISO with space separator
-                    (DateFmt::Iso, Separator::Space, TimeFmt::Hms, None) => {
-                        "Space-separated datetime"
-                    }
-                    (DateFmt::Iso, Separator::Space, TimeFmt::HmsFrac, None) => {
-                        "Space-separated datetime (fractional seconds)"
-                    }
-                    // Slash datetime
-                    (DateFmt::SlashUS, Separator::Space, TimeFmt::Hms, None) => "US slash datetime",
-                    (DateFmt::SlashEU, Separator::Space, TimeFmt::Hms, None) => "EU slash datetime",
-                    // Compact datetime
-                    (DateFmt::Compact, Separator::T, TimeFmt::HmsCompact, None) => {
-                        "Compact datetime (yyyymmddThhmmss)"
-                    }
-                    // Catch-all for any future combinations
-                    _ => "Standard datetime",
                 }
             }
         }
+        formats
     }
 
-    /// Polars-compatible format string.
-    pub fn polars_format(&self) -> &'static str {
+    /// Polars-compatible format string, built compositionally from components.
+    pub fn polars_format(&self) -> String {
         match self {
-            StandardFormat::DateOnly { date } => match date {
-                DateFmt::Iso => "%Y-%m-%d",
-                DateFmt::SlashUS => "%m/%d/%Y",
-                DateFmt::SlashEU => "%d/%m/%Y",
-                DateFmt::Compact => "%Y%m%d",
-            },
-            StandardFormat::DateTime {
-                date,
-                sep,
-                time,
-                tz,
-            } => {
-                match (date, sep, time, tz) {
-                    // ISO with T separator
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, None) => "%Y-%m-%dT%H:%M:%S",
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Utc)) => {
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::Offset)) => {
-                        "%Y-%m-%dT%H:%M:%S%:z"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::Hms, Some(Timezone::OffsetCompact)) => {
-                        "%Y-%m-%dT%H:%M:%S%z"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, None) => "%Y-%m-%dT%H:%M:%S%.f",
-                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Utc)) => {
-                        "%Y-%m-%dT%H:%M:%S%.fZ"
-                    }
-                    (DateFmt::Iso, Separator::T, TimeFmt::HmsFrac, Some(Timezone::Offset)) => {
-                        "%Y-%m-%dT%H:%M:%S%.f%:z"
-                    }
-                    (
-                        DateFmt::Iso,
-                        Separator::T,
-                        TimeFmt::HmsFrac,
-                        Some(Timezone::OffsetCompact),
-                    ) => "%Y-%m-%dT%H:%M:%S%.f%z",
-                    // ISO with space separator
-                    (DateFmt::Iso, Separator::Space, TimeFmt::Hms, None) => "%Y-%m-%d %H:%M:%S",
-                    (DateFmt::Iso, Separator::Space, TimeFmt::HmsFrac, None) => {
-                        "%Y-%m-%d %H:%M:%S%.f"
-                    }
-                    // Slash datetime
-                    (DateFmt::SlashUS, Separator::Space, TimeFmt::Hms, None) => "%m/%d/%Y %H:%M:%S",
-                    (DateFmt::SlashEU, Separator::Space, TimeFmt::Hms, None) => "%d/%m/%Y %H:%M:%S",
-                    // Compact datetime
-                    (DateFmt::Compact, Separator::T, TimeFmt::HmsCompact, None) => "%Y%m%dT%H%M%S",
-                    // Catch-all (shouldn't happen with valid combinations)
-                    _ => "%Y-%m-%dT%H:%M:%S",
+            StandardFormat::DateOnly { date } => date.polars_date().to_string(),
+            StandardFormat::DateTime { date, sep, time, tz } => {
+                let mut s = date.polars_date().to_string();
+                s.push_str(sep.polars_sep());
+                s.push_str(time.polars_time());
+                if let Some(tz) = tz {
+                    s.push_str(tz.polars_tz());
                 }
+                s
             }
         }
     }
@@ -497,16 +497,6 @@ impl StandardFormat {
 // ─── UnixFormat Implementation ───────────────────────────────────────────────
 
 impl UnixFormat {
-    /// Human-readable label.
-    pub fn name(&self) -> &'static str {
-        match self.precision {
-            UnixPrecision::Seconds => "Unix epoch seconds",
-            UnixPrecision::Milliseconds => "Unix epoch milliseconds",
-            UnixPrecision::Microseconds => "Unix epoch microseconds",
-            UnixPrecision::Nanoseconds => "Unix epoch nanoseconds",
-        }
-    }
-
     /// Polars-compatible format marker.
     pub fn polars_format(&self) -> &'static str {
         match self.precision {

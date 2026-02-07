@@ -56,36 +56,15 @@ later sections depend on earlier ones being solid.
   - `UnixFormat` struct for epoch timestamps
   - Top-level `Format` enum: `Standard(StandardFormat) | Unix(UnixFormat)`
   - Named constants (`Format::Iso8601DateTime`, etc.) for backwards compatibility
-- [ ] **Programmatic format enumeration** (`src/formats.rs`)
-  - Current limitation: adding a new `DateFmt` still requires manually adding named
-    constants and updating `Format::all()`, `name()`, `polars_format()` for each combination
-  - Goal: generate all valid format combinations automatically from component enums
-  - Implementation steps:
-    1. Add `DateFmt::all()`, `UnixPrecision::all()` iterator methods
-    2. Add `DateFmt::valid_separators()` → which separators work with this date format
-       - `Iso` → `[T, Space]`
-       - `SlashUS`, `SlashEU` → `[Space]`
-       - `Compact` → `[T]`
-    3. Add `DateFmt::valid_time_formats()` → which time formats work with this date format
-       - `Iso` → `[Hms, HmsFrac]`
-       - `SlashUS`, `SlashEU` → `[Hms]`
-       - `Compact` → `[HmsCompact]`
-    4. Add `DateFmt::valid_timezones()` → which tz options work with this date format
-       - `Iso` → `[None, Some(Utc), Some(Offset), Some(OffsetCompact)]`
-       - `SlashUS`, `SlashEU`, `Compact` → `[None]`
-    5. Add `StandardFormat::all_valid()` → iterate over all valid combinations using above methods
-    6. Change `Format::all()` to use `OnceLock<Vec<Format>>` and generate from
-       `StandardFormat::all_valid()` + `UnixPrecision::all()`
-    7. Make `name()` and `polars_format()` compositional (build from component methods)
-       - Each component implements its own `name()` and `polars_format()` fragment
-       - `StandardFormat` assembles fragments: `date.fmt() + sep.fmt() + time.fmt() + tz.fmt()`
-       - Return type changes from `&'static str` to `String` (minor allocation trade-off)
-    8. Named constants become optional conveniences, no longer source of truth
-  - Result: adding new `DateFmt::Dot` requires only:
-    1. Add enum variant
-    2. Implement `valid_separators()`, `valid_time_formats()`, `valid_timezones()`
-    3. Implement `name()` and `polars_format()` fragments
-    4. All combinations auto-generated
+- [x] **Programmatic format enumeration** (`src/formats.rs`)
+  - `Format::all()` is now generated via `OnceLock` from `StandardFormat::all_valid()` +
+    `UnixPrecision::all()` — no manual listing required
+  - `name()` and `polars_format()` built compositionally from per-component fragment methods
+  - `valid_timezones` takes `(DateFmt, Separator)` not just `DateFmt` — only `Iso + T`
+    supports timezone suffixes (Space-separated with tz is explicitly rejected)
+  - Named constants kept (with `dead_code` allow) as test conveniences only
+  - Adding a new date family now requires only: add variant, implement constraint &
+    fragment methods — all combinations auto-generated
 - [ ] Verify `%.f` fractional-second handling in Polars
   - Polars may require fixed-width specifiers like `%.3f` / `%.6f` / `%.9f`
   - If so, add fractional-precision detection to the validator and the format enum
