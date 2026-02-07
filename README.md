@@ -14,7 +14,7 @@ The inference engine treats each candidate timestamp format as a variable in a
 Constraint Satisfaction Problem (CSP). Each cell value in the column acts as a
 constraint that narrows the candidate set:
 
-1. **Initialise** – start with all 21 known formats as candidates.
+1. **Initialise** – start with all format combinations as candidates.
 2. **Propagate** – for each non-null cell, eliminate every format that cannot
    parse that value.
 3. **Early exit** (default) – as soon as a single format remains, return it
@@ -52,8 +52,7 @@ data) and flexible (use `exhaustive=True` to validate the _entire_ column).
 
 ### Unix epoch digit-count ranges
 
-Unix formats use non-overlapping digit-count windows so the CSP can
-discriminate between units without ambiguity:
+Unix formats use non-overlapping digit-count windows so the CSP can discriminate between units without ambiguity:
 
 | Variant          | Digit count | Approx. date range      |
 | ---------------- | ----------- | ----------------------- |
@@ -62,13 +61,11 @@ discriminate between units without ambiguity:
 | UnixMicroseconds | 14–16       | 1970 … 2286 (µs)        |
 | UnixNanoseconds  | 17–19       | 1677 … 2262 (ns, i64)   |
 
-Values with 1–8 digits do not match any Unix variant; 8-digit numeric strings
-are handled exclusively by `DateCompact` (if the digits form a valid date).
+Values with 1–8 digits do not match any Unix variant; 8-digit numeric strings are handled exclusively by `DateCompact` (if the digits form a valid date).
 
 ### Architecture: Compositional format design
 
-Internally, formats are represented using a compositional structure rather than
-a flat enum. This makes adding new format variants much easier:
+Internally, formats are represented using a compositional structure rather than a flat enum. This makes adding new format variants much easier:
 
 ```
 Format
@@ -85,8 +82,10 @@ Components:
   UnixPrecision: Seconds | Milliseconds | Microseconds | Nanoseconds
 ```
 
-Adding a new timezone format (e.g., named timezones) requires adding one
-`Timezone` variant instead of duplicating across all datetime combinations.
+All possible combinations (4 dates × 2 seps × 3 times × 4 tz options = 96 DateTime + 4 DateOnly + 4 Unix = 104 total) are generated automatically. Validators reject impossible combinations (e.g., slash dates with `T` separator, space-separated with timezone). 
+The CSP eliminates these invalid formats on the first value anyway, so the performance cost is negligible.
+
+Adding a new timezone format (e.g., named timezones) requires adding one `Timezone` variant and updating the validator, instead of duplicating across all datetime combinations.
 
 ## Installation
 

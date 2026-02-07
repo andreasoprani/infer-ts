@@ -85,6 +85,19 @@ mod tests {
         v.iter().map(|s| Some(*s)).collect()
     }
 
+    // Format constructor helpers for concise test assertions
+    fn std(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
+        Format::Standard(StandardFormat::DateTime { date, sep, time, tz })
+    }
+    fn date_only(date: DateFmt) -> Format {
+        Format::Standard(StandardFormat::DateOnly { date })
+    }
+    fn unix(precision: UnixPrecision) -> Format {
+        Format::Unix(UnixFormat { precision })
+    }
+
+    use crate::formats::{DateFmt::{self, *}, Separator::{self, *}, TimeFmt::{self, *}, Timezone::{self, *}, UnixPrecision::{self, *}, StandardFormat, UnixFormat};
+
     // ── Happy-path: every format family resolves correctly ─────────────────
 
     #[test]
@@ -94,7 +107,7 @@ mod tests {
                 &vals(&["2024-01-15T10:30:00", "2024-06-20T08:00:00"]),
                 false
             ),
-            vec![Format::Iso8601DateTime]
+            vec![std(Iso, T, Hms, None)]
         );
     }
 
@@ -102,7 +115,7 @@ mod tests {
     fn infer_iso8601_utc() {
         assert_eq!(
             infer(&vals(&["2024-01-15T10:30:00Z"]), false),
-            vec![Format::Iso8601DateTimeUtc]
+            vec![std(Iso, T, Hms, Some(Utc))]
         );
     }
 
@@ -110,7 +123,7 @@ mod tests {
     fn infer_iso8601_offset() {
         assert_eq!(
             infer(&vals(&["2024-01-15T10:30:00+05:30"]), false),
-            vec![Format::Iso8601DateTimeOffset]
+            vec![std(Iso, T, Hms, Some(Offset))]
         );
     }
 
@@ -118,7 +131,7 @@ mod tests {
     fn infer_iso8601_frac() {
         assert_eq!(
             infer(&vals(&["2024-01-15T10:30:00.123"]), false),
-            vec![Format::Iso8601DateTimeFrac]
+            vec![std(Iso, T, HmsFrac, None)]
         );
     }
 
@@ -126,7 +139,7 @@ mod tests {
     fn infer_iso8601_frac_utc() {
         assert_eq!(
             infer(&vals(&["2024-01-15T10:30:00.123Z"]), false),
-            vec![Format::Iso8601DateTimeFracUtc]
+            vec![std(Iso, T, HmsFrac, Some(Utc))]
         );
     }
 
@@ -134,7 +147,7 @@ mod tests {
     fn infer_iso8601_frac_offset() {
         assert_eq!(
             infer(&vals(&["2024-01-15T10:30:00.123+05:30"]), false),
-            vec![Format::Iso8601DateTimeFracOffset]
+            vec![std(Iso, T, HmsFrac, Some(Offset))]
         );
     }
 
@@ -142,7 +155,7 @@ mod tests {
     fn infer_space_plain() {
         assert_eq!(
             infer(&vals(&["2024-01-15 10:30:00"]), false),
-            vec![Format::SpaceDateTime]
+            vec![std(Iso, Space, Hms, None)]
         );
     }
 
@@ -150,7 +163,7 @@ mod tests {
     fn infer_space_frac() {
         assert_eq!(
             infer(&vals(&["2024-01-15 10:30:00.999999"]), false),
-            vec![Format::SpaceDateTimeFrac]
+            vec![std(Iso, Space, HmsFrac, None)]
         );
     }
 
@@ -158,7 +171,7 @@ mod tests {
     fn infer_date_iso() {
         assert_eq!(
             infer(&vals(&["2024-01-15", "2024-06-20"]), false),
-            vec![Format::DateISO]
+            vec![date_only(Iso)]
         );
     }
 
@@ -166,7 +179,7 @@ mod tests {
     fn infer_slash_us_unambiguous() {
         assert_eq!(
             infer(&vals(&["01/15/2024", "06/20/2024"]), false),
-            vec![Format::DateSlashUS]
+            vec![date_only(SlashUS)]
         );
     }
 
@@ -174,7 +187,7 @@ mod tests {
     fn infer_slash_eu_unambiguous() {
         assert_eq!(
             infer(&vals(&["15/01/2024", "20/06/2024"]), false),
-            vec![Format::DateSlashEU]
+            vec![date_only(SlashEU)]
         );
     }
 
@@ -182,7 +195,7 @@ mod tests {
     fn infer_slash_us_datetime() {
         assert_eq!(
             infer(&vals(&["01/15/2024 10:30:00"]), false),
-            vec![Format::DateTimeSlashUS]
+            vec![std(SlashUS, Space, Hms, None)]
         );
     }
 
@@ -190,7 +203,7 @@ mod tests {
     fn infer_slash_eu_datetime() {
         assert_eq!(
             infer(&vals(&["15/01/2024 10:30:00"]), false),
-            vec![Format::DateTimeSlashEU]
+            vec![std(SlashEU, Space, Hms, None)]
         );
     }
 
@@ -198,7 +211,7 @@ mod tests {
     fn infer_compact_date() {
         assert_eq!(
             infer(&vals(&["20240115", "20240620"]), false),
-            vec![Format::DateCompact]
+            vec![date_only(Compact)]
         );
     }
 
@@ -206,7 +219,7 @@ mod tests {
     fn infer_compact_datetime() {
         assert_eq!(
             infer(&vals(&["20240115T103000"]), false),
-            vec![Format::DateTimeCompact]
+            vec![std(Compact, T, HmsCompact, None)]
         );
     }
 
@@ -214,7 +227,7 @@ mod tests {
     fn infer_unix_seconds() {
         assert_eq!(
             infer(&vals(&["1705312200", "1705398600"]), false),
-            vec![Format::UnixSeconds]
+            vec![unix(Seconds)]
         );
     }
 
@@ -222,7 +235,7 @@ mod tests {
     fn infer_unix_ms() {
         assert_eq!(
             infer(&vals(&["1705312200000", "1705398600000"]), false),
-            vec![Format::UnixMilliseconds]
+            vec![unix(Milliseconds)]
         );
     }
 
@@ -230,7 +243,7 @@ mod tests {
     fn infer_unix_us() {
         assert_eq!(
             infer(&vals(&["1705312200000000"]), false),
-            vec![Format::UnixMicroseconds]
+            vec![unix(Microseconds)]
         );
     }
 
@@ -238,7 +251,7 @@ mod tests {
     fn infer_unix_ns() {
         assert_eq!(
             infer(&vals(&["1705312200000000000"]), false),
-            vec![Format::UnixNanoseconds]
+            vec![unix(Nanoseconds)]
         );
     }
 
@@ -249,7 +262,7 @@ mod tests {
         // First value ambiguous (day ≤ 12 in both positions), second resolves to EU.
         assert_eq!(
             infer(&vals(&["01/02/2024", "15/03/2024"]), false),
-            vec![Format::DateSlashEU]
+            vec![date_only(SlashEU)]
         );
     }
 
@@ -258,7 +271,7 @@ mod tests {
         // First value ambiguous, second resolves to US (day 20 in second slot).
         assert_eq!(
             infer(&vals(&["01/02/2024", "03/20/2024"]), false),
-            vec![Format::DateSlashUS]
+            vec![date_only(SlashUS)]
         );
     }
 
@@ -269,7 +282,7 @@ mod tests {
                 &vals(&["01/02/2024 10:00:00", "15/03/2024 11:00:00"]),
                 false
             ),
-            vec![Format::DateTimeSlashEU]
+            vec![std(SlashEU, Space, Hms, None)]
         );
     }
 
@@ -284,19 +297,19 @@ mod tests {
             Some("2024-06-20T08:00:00"),
             None,
         ];
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTime]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, Hms, None)]);
     }
 
     #[test]
     fn whitespace_only_skipped() {
         let input: Vec<Option<&str>> = vec![Some("   "), Some("2024-01-15T10:30:00"), Some("\t\n")];
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTime]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, Hms, None)]);
     }
 
     #[test]
     fn leading_trailing_whitespace_trimmed() {
         let input: Vec<Option<&str>> = vec![Some("  2024-01-15T10:30:00  ")];
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTime]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, Hms, None)]);
     }
 
     // ── Empty column handling ───────────────────────────────────────────────
@@ -338,8 +351,8 @@ mod tests {
         // Every day value ≤ 12 → US and EU both survive.
         let input = vals(&["01/02/2024", "03/04/2024", "05/06/2024"]);
         let result = infer(&input, false);
-        assert!(result.contains(&Format::DateSlashUS));
-        assert!(result.contains(&Format::DateSlashEU));
+        assert!(result.contains(&date_only(SlashUS)));
+        assert!(result.contains(&date_only(SlashEU)));
         assert_eq!(result.len(), 2);
     }
 
@@ -347,8 +360,8 @@ mod tests {
     fn ambiguous_slash_datetimes_returns_both() {
         let input = vals(&["01/02/2024 10:00:00", "03/04/2024 11:00:00"]);
         let result = infer(&input, false);
-        assert!(result.contains(&Format::DateTimeSlashUS));
-        assert!(result.contains(&Format::DateTimeSlashEU));
+        assert!(result.contains(&std(SlashUS, Space, Hms, None)));
+        assert!(result.contains(&std(SlashEU, Space, Hms, None)));
         assert_eq!(result.len(), 2);
     }
 
@@ -359,25 +372,25 @@ mod tests {
     #[test]
     fn early_exit_iso8601_offset() {
         let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeOffset]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, Hms, Some(Offset))]);
     }
 
     #[test]
     fn early_exit_iso8601_frac_utc() {
         let input = vals(&["2024-01-15T10:30:00.123Z", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeFracUtc]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, HmsFrac, Some(Utc))]);
     }
 
     #[test]
     fn early_exit_compact_datetime() {
         let input = vals(&["20240115T103000", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![Format::DateTimeCompact]);
+        assert_eq!(infer(&input, false), vec![std(Compact, T, HmsCompact, None)]);
     }
 
     #[test]
     fn early_exit_unix_ns() {
         let input = vals(&["1705312200000000000", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![Format::UnixNanoseconds]);
+        assert_eq!(infer(&input, false), vec![unix(Nanoseconds)]);
     }
 
     // ── Exhaustive mode tests ───────────────────────────────────────────────
@@ -389,7 +402,7 @@ mod tests {
 
         // Non-exhaustive: early exit, never sees GARBAGE
         let non_exhaustive = infer(&input, false);
-        assert_eq!(non_exhaustive, vec![Format::Iso8601DateTimeOffset]);
+        assert_eq!(non_exhaustive, vec![std(Iso, T, Hms, Some(Offset))]);
 
         // Exhaustive: processes all values including GARBAGE → no match
         let exhaustive = infer(&input, true);
@@ -402,8 +415,8 @@ mod tests {
         let input = vals(&["2024-01-15T10:30:00+05:30"]);
 
         // Both modes return the same result for unambiguous single-value input
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeOffset]);
-        assert_eq!(infer(&input, true), vec![Format::Iso8601DateTimeOffset]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, Hms, Some(Offset))]);
+        assert_eq!(infer(&input, true), vec![std(Iso, T, Hms, Some(Offset))]);
     }
 
     #[test]
@@ -413,8 +426,8 @@ mod tests {
         let input = vals(&["2024-01-15T10:30:00+05:30", "2024-06-20T08:00:00+02:00"]);
 
         // Both should return the same single format
-        assert_eq!(infer(&input, false), vec![Format::Iso8601DateTimeOffset]);
-        assert_eq!(infer(&input, true), vec![Format::Iso8601DateTimeOffset]);
+        assert_eq!(infer(&input, false), vec![std(Iso, T, Hms, Some(Offset))]);
+        assert_eq!(infer(&input, true), vec![std(Iso, T, Hms, Some(Offset))]);
     }
 
     #[test]

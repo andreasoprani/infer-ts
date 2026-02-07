@@ -193,126 +193,6 @@ pub enum Format {
     Unix(UnixFormat),
 }
 
-// ─── Named Format Constants ──────────────────────────────────────────────────
-//
-// These provide backwards-compatible names for the 21 standard formats.
-
-#[allow(non_upper_case_globals, dead_code)]
-impl Format {
-    // ISO 8601 (T separator)
-    pub const Iso8601DateTime: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::Hms,
-        tz: None,
-    });
-    pub const Iso8601DateTimeUtc: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::Hms,
-        tz: Some(Timezone::Utc),
-    });
-    pub const Iso8601DateTimeOffset: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::Hms,
-        tz: Some(Timezone::Offset),
-    });
-    pub const Iso8601DateTimeOffsetCompact: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::Hms,
-        tz: Some(Timezone::OffsetCompact),
-    });
-    pub const Iso8601DateTimeFrac: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::HmsFrac,
-        tz: None,
-    });
-    pub const Iso8601DateTimeFracUtc: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::HmsFrac,
-        tz: Some(Timezone::Utc),
-    });
-    pub const Iso8601DateTimeFracOffset: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::T,
-        time: TimeFmt::HmsFrac,
-        tz: Some(Timezone::Offset),
-    });
-    pub const Iso8601DateTimeFracOffsetCompact: Format =
-        Format::Standard(StandardFormat::DateTime {
-            date: DateFmt::Iso,
-            sep: Separator::T,
-            time: TimeFmt::HmsFrac,
-            tz: Some(Timezone::OffsetCompact),
-        });
-
-    // Space-separated
-    pub const SpaceDateTime: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::Space,
-        time: TimeFmt::Hms,
-        tz: None,
-    });
-    pub const SpaceDateTimeFrac: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Iso,
-        sep: Separator::Space,
-        time: TimeFmt::HmsFrac,
-        tz: None,
-    });
-
-    // Date-only
-    pub const DateISO: Format = Format::Standard(StandardFormat::DateOnly { date: DateFmt::Iso });
-    pub const DateSlashUS: Format = Format::Standard(StandardFormat::DateOnly {
-        date: DateFmt::SlashUS,
-    });
-    pub const DateSlashEU: Format = Format::Standard(StandardFormat::DateOnly {
-        date: DateFmt::SlashEU,
-    });
-    pub const DateCompact: Format = Format::Standard(StandardFormat::DateOnly {
-        date: DateFmt::Compact,
-    });
-
-    // Slash datetime
-    pub const DateTimeSlashUS: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::SlashUS,
-        sep: Separator::Space,
-        time: TimeFmt::Hms,
-        tz: None,
-    });
-    pub const DateTimeSlashEU: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::SlashEU,
-        sep: Separator::Space,
-        time: TimeFmt::Hms,
-        tz: None,
-    });
-
-    // Compact datetime
-    pub const DateTimeCompact: Format = Format::Standard(StandardFormat::DateTime {
-        date: DateFmt::Compact,
-        sep: Separator::T,
-        time: TimeFmt::HmsCompact,
-        tz: None,
-    });
-
-    // Unix epoch
-    pub const UnixSeconds: Format = Format::Unix(UnixFormat {
-        precision: UnixPrecision::Seconds,
-    });
-    pub const UnixMilliseconds: Format = Format::Unix(UnixFormat {
-        precision: UnixPrecision::Milliseconds,
-    });
-    pub const UnixMicroseconds: Format = Format::Unix(UnixFormat {
-        precision: UnixPrecision::Microseconds,
-    });
-    pub const UnixNanoseconds: Format = Format::Unix(UnixFormat {
-        precision: UnixPrecision::Nanoseconds,
-    });
-}
-
 impl Format {
     /// Every supported format, generated from component constraints.
     ///
@@ -766,6 +646,19 @@ mod tests {
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
+    // Format constructor helpers for concise test assertions
+    fn std(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
+        Format::Standard(StandardFormat::DateTime { date, sep, time, tz })
+    }
+    fn date_only(date: DateFmt) -> Format {
+        Format::Standard(StandardFormat::DateOnly { date })
+    }
+    fn unix(precision: UnixPrecision) -> Format {
+        Format::Unix(UnixFormat { precision })
+    }
+
+    use super::{DateFmt::{self, *}, Separator::{self, *}, TimeFmt::{self, *}, Timezone::{self, *}, UnixPrecision::{self, *}, StandardFormat, UnixFormat};
+
     /// Assert that *only* `expected` validates `value`; every other format rejects it.
     fn assert_only(value: &str, expected: Format) {
         for fmt in Format::all() {
@@ -805,50 +698,50 @@ mod tests {
 
     #[test]
     fn iso8601_plain() {
-        assert_only("2024-01-15T10:30:00", Format::Iso8601DateTime);
+        assert_only("2024-01-15T10:30:00", std(Iso, T, Hms, None));
     }
 
     #[test]
     fn iso8601_utc() {
-        assert_only("2024-01-15T10:30:00Z", Format::Iso8601DateTimeUtc);
+        assert_only("2024-01-15T10:30:00Z", std(Iso, T, Hms, Some(Utc)));
     }
 
     #[test]
     fn iso8601_offset_with_colon() {
-        assert_only("2024-01-15T10:30:00+05:30", Format::Iso8601DateTimeOffset);
+        assert_only("2024-01-15T10:30:00+05:30", std(Iso, T, Hms, Some(Offset)));
     }
 
     #[test]
     fn iso8601_offset_without_colon() {
         assert_only(
             "2024-01-15T10:30:00+0530",
-            Format::Iso8601DateTimeOffsetCompact,
+            std(Iso, T, Hms, Some(OffsetCompact)),
         );
     }
 
     #[test]
     fn iso8601_negative_offset() {
-        assert_only("2024-01-15T10:30:00-08:00", Format::Iso8601DateTimeOffset);
+        assert_only("2024-01-15T10:30:00-08:00", std(Iso, T, Hms, Some(Offset)));
     }
 
     #[test]
     fn iso8601_negative_offset_compact() {
         assert_only(
             "2024-01-15T10:30:00-0800",
-            Format::Iso8601DateTimeOffsetCompact,
+            std(Iso, T, Hms, Some(OffsetCompact)),
         );
     }
 
     #[test]
     fn iso8601_frac() {
-        assert_only("2024-01-15T10:30:00.123456", Format::Iso8601DateTimeFrac);
+        assert_only("2024-01-15T10:30:00.123456", std(Iso, T, HmsFrac, None));
     }
 
     #[test]
     fn iso8601_frac_utc() {
         assert_only(
             "2024-01-15T10:30:00.123456Z",
-            Format::Iso8601DateTimeFracUtc,
+            std(Iso, T, HmsFrac, Some(Utc)),
         );
     }
 
@@ -856,7 +749,7 @@ mod tests {
     fn iso8601_frac_offset() {
         assert_only(
             "2024-01-15T10:30:00.123456+05:30",
-            Format::Iso8601DateTimeFracOffset,
+            std(Iso, T, HmsFrac, Some(Offset)),
         );
     }
 
@@ -864,28 +757,28 @@ mod tests {
     fn iso8601_frac_offset_compact() {
         assert_only(
             "2024-01-15T10:30:00.123456+0530",
-            Format::Iso8601DateTimeFracOffsetCompact,
+            std(Iso, T, HmsFrac, Some(OffsetCompact)),
         );
     }
 
     #[test]
     fn iso8601_lowercase_t() {
-        assert_only("2024-01-15t10:30:00", Format::Iso8601DateTime);
+        assert_only("2024-01-15t10:30:00", std(Iso, T, Hms, None));
     }
 
     #[test]
     fn iso8601_lowercase_z() {
-        assert_only("2024-01-15T10:30:00z", Format::Iso8601DateTimeUtc);
+        assert_only("2024-01-15T10:30:00z", std(Iso, T, Hms, Some(Utc)));
     }
 
     #[test]
     fn iso8601_frac_1_digit() {
-        assert_only("2024-01-15T10:30:00.1", Format::Iso8601DateTimeFrac);
+        assert_only("2024-01-15T10:30:00.1", std(Iso, T, HmsFrac, None));
     }
 
     #[test]
     fn iso8601_frac_9_digits() {
-        assert_only("2024-01-15T10:30:00.123456789", Format::Iso8601DateTimeFrac);
+        assert_only("2024-01-15T10:30:00.123456789", std(Iso, T, HmsFrac, None));
     }
 
     #[test]
@@ -902,12 +795,12 @@ mod tests {
 
     #[test]
     fn space_plain() {
-        assert_only("2024-01-15 10:30:00", Format::SpaceDateTime);
+        assert_only("2024-01-15 10:30:00", std(Iso, Space, Hms, None));
     }
 
     #[test]
     fn space_frac() {
-        assert_only("2024-01-15 10:30:00.999", Format::SpaceDateTimeFrac);
+        assert_only("2024-01-15 10:30:00.999", std(Iso, Space, HmsFrac, None));
     }
 
     #[test]
@@ -920,12 +813,12 @@ mod tests {
 
     #[test]
     fn date_iso() {
-        assert_only("2024-01-15", Format::DateISO);
+        assert_only("2024-01-15", date_only(Iso));
     }
 
     #[test]
     fn date_iso_leap_feb29() {
-        assert_only("2024-02-29", Format::DateISO);
+        assert_only("2024-02-29", date_only(Iso));
     }
 
     #[test]
@@ -935,10 +828,10 @@ mod tests {
 
     #[test]
     fn date_iso_month_boundaries() {
-        assert_only("2024-01-31", Format::DateISO);
+        assert_only("2024-01-31", date_only(Iso));
         assert_none("2024-01-32");
         assert_none("2024-02-30");
-        assert_only("2024-03-31", Format::DateISO);
+        assert_only("2024-03-31", date_only(Iso));
         assert_none("2024-04-31");
     }
 
@@ -947,50 +840,50 @@ mod tests {
     #[test]
     fn slash_ambiguous_both_match() {
         // 01/02/2024 → US: Jan 2, EU: Feb 1 — both valid
-        assert_set("01/02/2024", &[Format::DateSlashUS, Format::DateSlashEU]);
+        assert_set("01/02/2024", &[date_only(SlashUS), date_only(SlashEU)]);
     }
 
     #[test]
     fn slash_us_only() {
         // day=15 > 12 kills EU (would need month=15)
-        assert_only("01/15/2024", Format::DateSlashUS);
+        assert_only("01/15/2024", date_only(SlashUS));
     }
 
     #[test]
     fn slash_eu_only() {
         // first=15 > 12 kills US (would need month=15)
-        assert_only("15/01/2024", Format::DateSlashEU);
+        assert_only("15/01/2024", date_only(SlashEU));
     }
 
     #[test]
     fn slash_us_datetime() {
-        assert_only("01/15/2024 10:30:00", Format::DateTimeSlashUS);
+        assert_only("01/15/2024 10:30:00", std(SlashUS, Space, Hms, None));
     }
 
     #[test]
     fn slash_eu_datetime() {
-        assert_only("15/01/2024 10:30:00", Format::DateTimeSlashEU);
+        assert_only("15/01/2024 10:30:00", std(SlashEU, Space, Hms, None));
     }
 
     #[test]
     fn slash_datetime_ambiguous() {
         assert_set(
             "01/02/2024 10:30:00",
-            &[Format::DateTimeSlashUS, Format::DateTimeSlashEU],
+            &[std(SlashUS, Space, Hms, None), std(SlashEU, Space, Hms, None)],
         );
     }
 
     #[test]
     fn slash_bad_month_rejected() {
         // 13/01/2024 as US → month=13 invalid; as EU → day=13, month=01 → valid EU only
-        assert_only("13/01/2024", Format::DateSlashEU);
+        assert_only("13/01/2024", date_only(SlashEU));
     }
 
     // ── Compact ─────────────────────────────────────────────────────────────
 
     #[test]
     fn compact_date() {
-        assert_only("20240115", Format::DateCompact);
+        assert_only("20240115", date_only(Compact));
     }
 
     #[test]
@@ -1005,7 +898,7 @@ mod tests {
 
     #[test]
     fn compact_datetime() {
-        assert_only("20240115T103000", Format::DateTimeCompact);
+        assert_only("20240115T103000", std(Compact, T, HmsCompact, None));
     }
 
     #[test]
@@ -1017,37 +910,37 @@ mod tests {
 
     #[test]
     fn unix_seconds_10_digits() {
-        assert_only("1705312200", Format::UnixSeconds);
+        assert_only("1705312200", unix(Seconds));
     }
 
     #[test]
     fn unix_seconds_9_digits() {
-        assert_only("170531220", Format::UnixSeconds);
+        assert_only("170531220", unix(Seconds));
     }
 
     #[test]
     fn unix_ms_13_digits() {
-        assert_only("1705312200000", Format::UnixMilliseconds);
+        assert_only("1705312200000", unix(Milliseconds));
     }
 
     #[test]
     fn unix_ms_11_digits() {
-        assert_only("17053122000", Format::UnixMilliseconds);
+        assert_only("17053122000", unix(Milliseconds));
     }
 
     #[test]
     fn unix_us_16_digits() {
-        assert_only("1705312200000000", Format::UnixMicroseconds);
+        assert_only("1705312200000000", unix(Microseconds));
     }
 
     #[test]
     fn unix_ns_19_digits() {
-        assert_only("1705312200000000000", Format::UnixNanoseconds);
+        assert_only("1705312200000000000", unix(Nanoseconds));
     }
 
     #[test]
     fn unix_negative_seconds() {
-        assert_only("-170531220", Format::UnixSeconds);
+        assert_only("-170531220", unix(Seconds));
     }
 
     #[test]

@@ -5,44 +5,6 @@ later sections depend on earlier ones being solid.
 
 ---
 
-## v0.1 – Test coverage
-
-- [x] **Unit tests for every format validator** (`src/formats.rs`)
-  - Happy-path: one canonical example per format
-  - Boundary dates: leap years (Feb 29), month-end days, year 0 / negative years
-  - Fractional-second precision: 1 digit through 9 digits
-  - Timezone offsets: `+00:00`, `-12:00`, `+0530` (no-colon variant)
-  - Reject cases: wrong separator, truncated string, out-of-range values
-- [x] **Unit tests for the inference engine** (`src/inference.rs`)
-  - Single-format columns (one value is enough for early exit)
-  - Ambiguous columns that stay ambiguous (US vs EU slash with all days ≤ 12)
-  - Columns that start ambiguous and resolve mid-way
-  - All-null / all-empty columns → returns all formats
-  - Mixed nulls and valid values
-- [x] **Integration test: round-trip with Polars** (Python test script)
-  - Spin up a `DataFrame`, call `infer_format`, apply the returned format with
-    `str.to_datetime`, assert the resulting dtype is `Datetime`
-  - Cover at least: ISO 8601, space-separated, US/EU slash, compact, Unix epoch
-
----
-
-## v0.1.1 – Multi-format return and exhaustive mode
-
-- [x] **Change return type to list of formats**
-  - `infer_format()` now returns `list[str]` instead of `str`
-  - Ambiguous columns return all compatible formats instead of error
-  - No format match returns empty list instead of error
-- [x] **Add `exhaustive` parameter**
-  - Default `False`: early-exit when single format remains
-  - `True`: process all values, return all compatible formats
-- [x] **Simplify error handling**
-  - Removed `EmptyColumn` error (empty columns return all formats)
-  - Removed `Ambiguous` error (return multiple formats in list)
-  - Removed `NoMatch` error (return empty list)
-  - Function never raises exceptions
-
----
-
 ## v0.2 – Polars format string verification
 
 - [x] Verify `%:z` offset parsing works in Polars `str.to_datetime`
@@ -55,16 +17,14 @@ later sections depend on earlier ones being solid.
   - `StandardFormat` enum with `DateOnly` and `DateTime` variants
   - `UnixFormat` struct for epoch timestamps
   - Top-level `Format` enum: `Standard(StandardFormat) | Unix(UnixFormat)`
-  - Named constants (`Format::Iso8601DateTime`, etc.) for backwards compatibility
 - [x] **Programmatic format enumeration** (`src/formats.rs`)
-  - `Format::all()` is now generated via `OnceLock` from `StandardFormat::all_valid()` +
-    `UnixPrecision::all()` — no manual listing required
-  - `name()` and `polars_format()` built compositionally from per-component fragment methods
-  - `valid_timezones` takes `(DateFmt, Separator)` not just `DateFmt` — only `Iso + T`
-    supports timezone suffixes (Space-separated with tz is explicitly rejected)
-  - Named constants kept (with `dead_code` allow) as test conveniences only
-  - Adding a new date family now requires only: add variant, implement constraint &
-    fragment methods — all combinations auto-generated
+  - `Format::all()` generates all 104 possible combinations (4 dates × 2 seps × 3 times × 4 tz + 4 date-only + 4 unix)
+  - Validators reject impossible combinations (e.g., slash dates with `T` separator)
+  - Removed constraint methods (`valid_separators`, `valid_time_formats`, `valid_timezones`)
+  - Removed `name()` methods — only `polars_format()` matters for inference
+  - Removed named constants — tests use helper functions instead
+  - Adding a new date family now requires only: add variant, implement `polars_date()` fragment,
+    update validator to check combination validity
 - [ ] Verify `%.f` fractional-second handling in Polars
   - Polars may require fixed-width specifiers like `%.3f` / `%.6f` / `%.9f`
   - If so, add fractional-precision detection to the validator and the format enum
