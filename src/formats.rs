@@ -10,8 +10,10 @@
 //!
 //! Formats are organized compositionally:
 //!
-//! - **Standard formats** combine a date format, optional separator, optional time,
-//!   and optional timezone. Not all combinations are valid (e.g., timezone requires time).
+//! - **Standard formats** combine a date format, separator, time format, and optional
+//!   timezone. All combinations are generated; the validator rejects impossible ones
+//!   (e.g., slash dates with `T` separator). The CSP inference eliminates these on the
+//!   first value anyway.
 //!
 //! - **Unix formats** are bare integers distinguished by digit count.
 
@@ -78,48 +80,22 @@ pub enum UnixPrecision {
     Nanoseconds,
 }
 
-// ─── Component Constraints & Fragments ──────────────────────────────────────
+// ─── Component Fragments ────────────────────────────────────────────────────
 //
-// Each component knows (a) which other components it is valid with and (b) how
-// to contribute its fragment to a Polars format string.
-// `StandardFormat::all_valid()` drives the nested iteration; adding a new variant
-// to any component enum and filling in these methods is all that is needed to
-// include every valid combination in the format list.
+// Each component knows how to contribute its fragment to a Polars format string.
+// `StandardFormat::all_valid()` generates all possible combinations; the validator
+// rejects impossible ones. Adding a new variant only requires implementing the
+// fragment method and ensuring `validates()` handles it.
 
 impl DateFmt {
     /// All date formats, in definition order.
     const fn all() -> &'static [DateFmt] {
-        &[DateFmt::Iso, DateFmt::SlashUS, DateFmt::SlashEU, DateFmt::Compact]
-    }
-
-    /// Which separators are valid with this date format.
-    fn valid_separators(&self) -> &'static [Separator] {
-        match self {
-            DateFmt::Iso => &[Separator::T, Separator::Space],
-            DateFmt::SlashUS | DateFmt::SlashEU => &[Separator::Space],
-            DateFmt::Compact => &[Separator::T],
-        }
-    }
-
-    /// Which time formats are valid with this date format.
-    fn valid_time_formats(&self) -> &'static [TimeFmt] {
-        match self {
-            DateFmt::Iso => &[TimeFmt::Hms, TimeFmt::HmsFrac],
-            DateFmt::SlashUS | DateFmt::SlashEU => &[TimeFmt::Hms],
-            DateFmt::Compact => &[TimeFmt::HmsCompact],
-        }
-    }
-
-    /// Which timezone options are valid with this date format and separator.
-    /// Only ISO + T supports timezone suffixes; space-separated and slash/compact
-    /// formats do not.
-    fn valid_timezones(&self, sep: &Separator) -> &'static [Option<Timezone>] {
-        match (self, sep) {
-            (DateFmt::Iso, Separator::T) => {
-                &[None, Some(Timezone::Utc), Some(Timezone::Offset), Some(Timezone::OffsetCompact)]
-            }
-            _ => &[None],
-        }
+        &[
+            DateFmt::Iso,
+            DateFmt::SlashUS,
+            DateFmt::SlashEU,
+            DateFmt::Compact,
+        ]
     }
 
     /// Polars date fragment.
@@ -179,12 +155,11 @@ impl UnixPrecision {
 
 // ─── Standard Format ─────────────────────────────────────────────────────────
 
-/// A standard datetime format composed of date, optional time, and optional timezone.
+/// A standard datetime format composed of date, separator, time, and optional timezone.
 ///
-/// Constraints enforced by construction:
-/// - Cannot have timezone without time
-/// - Compact time (`HHMMSS`) only valid with compact date
-/// - Fractional seconds and timezone only valid with ISO/Space formats
+/// All combinations are constructible; the validator enforces which are actually parseable.
+/// For example, `SlashUS + T separator` is impossible to parse but structurally valid.
+/// The CSP inference eliminates impossible formats on the first value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StandardFormat {
     /// Date only (no time component)
@@ -395,27 +370,38 @@ impl Format {
 // ─── StandardFormat Implementation ───────────────────────────────────────────
 
 impl StandardFormat {
-    /// Generate all valid format combinations by iterating over component
-    /// constraints.  Extending the set of supported formats only requires
-    /// adding a variant to one of the component enums and wiring its
-    /// `valid_*` / fragment methods — no manual enumeration here.
+    /// Generate all possible format combinations from component enums.
+    /// Many combinations are impossible to parse (e.g., slash dates with `T` separator),
+    /// but the validator rejects them naturally. The CSP inference eliminates impossible
+    /// formats on the first value anyway, so the performance cost is negligible.
     fn all_valid() -> Vec<StandardFormat> {
+        use Separator::*;
+        use TimeFmt::*;
+        use Timezone::*;
+
         let mut formats = Vec::new();
+
+        // Date-only formats
         for date in DateFmt::all() {
             formats.push(StandardFormat::DateOnly { date: *date });
-            for sep in date.valid_separators() {
-                for time in date.valid_time_formats() {
-                    for tz in date.valid_timezones(sep) {
+        }
+
+        // All datetime combinations
+        for date in DateFmt::all() {
+            for sep in [T, Space] {
+                for time in [Hms, HmsFrac, HmsCompact] {
+                    for tz in [None, Some(Utc), Some(Offset), Some(OffsetCompact)] {
                         formats.push(StandardFormat::DateTime {
                             date: *date,
-                            sep: *sep,
-                            time: *time,
-                            tz: *tz,
+                            sep,
+                            time,
+                            tz,
                         });
                     }
                 }
             }
         }
+
         formats
     }
 
@@ -423,7 +409,12 @@ impl StandardFormat {
     pub fn polars_format(&self) -> String {
         match self {
             StandardFormat::DateOnly { date } => date.polars_date().to_string(),
-            StandardFormat::DateTime { date, sep, time, tz } => {
+            StandardFormat::DateTime {
+                date,
+                sep,
+                time,
+                tz,
+            } => {
                 let mut s = date.polars_date().to_string();
                 s.push_str(sep.polars_sep());
                 s.push_str(time.polars_time());
@@ -463,6 +454,10 @@ impl StandardFormat {
                         if !sep_matches {
                             return false;
                         }
+                        // Space-separated formats don't support timezones
+                        if matches!(sep, Separator::Space) && tz.is_some() {
+                            return false;
+                        }
                         // Check fractional
                         let frac_matches = match time {
                             TimeFmt::Hms => !parsed.has_frac,
@@ -481,10 +476,18 @@ impl StandardFormat {
                             _ => false,
                         }
                     }
-                    DateFmt::SlashUS => validate_slash_datetime(value, true),
-                    DateFmt::SlashEU => validate_slash_datetime(value, false),
+                    DateFmt::SlashUS => {
+                        // Only valid with space separator, HMS time, no timezone
+                        matches!((sep, time, tz), (Separator::Space, TimeFmt::Hms, None))
+                            && validate_slash_datetime(value, true)
+                    }
+                    DateFmt::SlashEU => {
+                        // Only valid with space separator, HMS time, no timezone
+                        matches!((sep, time, tz), (Separator::Space, TimeFmt::Hms, None))
+                            && validate_slash_datetime(value, false)
+                    }
                     DateFmt::Compact => {
-                        // Only valid with T separator and compact time
+                        // Only valid with T separator, compact time, no timezone
                         matches!((sep, time, tz), (Separator::T, TimeFmt::HmsCompact, None))
                             && validate_compact_datetime(value)
                     }
