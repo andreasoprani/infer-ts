@@ -35,7 +35,7 @@ later sections depend on earlier ones being solid.
 ## v0.3 – Additional format families
 
 - [x] Space-separated datetime with timezone: `2024-01-15 10:30:00+05:30`
-- [ ] 12-hour time with AM/PM: `01/15/2024 2:30:00 PM`
+- [x] 12-hour time with AM/PM: `01/15/2024 2:30:00 PM`
 - [ ] Short (2-digit) year: `01/15/24`, `15/01/24`
 - [ ] Dot-separated European date: `15.01.2024`
 - [ ] Month-name formats: `Jan 15, 2024` / `15 Jan 2024`

@@ -278,6 +278,83 @@ class TestUnixEpoch:
         assert result[0].year == 2024
 
 
+# ─── 12-hour AM/PM ────────────────────────────────────────────────────────────
+
+
+class TestAMPM:
+    """12-hour AM/PM time formats."""
+
+    def test_us_slash_ampm(self):
+        s = pl.Series("ts", ["01/15/2024 2:30:00 PM", "06/20/2024 8:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14  # 2:30 PM = 14:30
+        assert result[0].minute == 30
+
+    def test_eu_slash_ampm(self):
+        s = pl.Series("ts", ["15/01/2024 2:30:00 PM", "20/06/2024 8:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_iso_ampm(self):
+        s = pl.Series("ts", ["2024-01-15 2:30:00 PM", "2024-06-20 8:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+
+    def test_ampm_padded_hour(self):
+        s = pl.Series("ts", ["01/15/2024 02:30:00 PM", "06/20/2024 08:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+
+    def test_ampm_midnight_noon(self):
+        s = pl.Series("ts", ["01/15/2024 12:00:00 AM", "01/15/2024 12:00:00 PM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 0   # 12:00 AM = midnight
+        assert result[1].hour == 12  # 12:00 PM = noon
+
+    def test_ampm_case_insensitive(self):
+        s = pl.Series("ts", ["01/15/2024 2:30:00 pm", "01/15/2024 3:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[1].hour == 3
+
+    def test_ampm_compact_us_slash(self):
+        """AM/PM without space before suffix (e.g. 2:30:00PM)."""
+        s = pl.Series("ts", ["01/15/2024 2:30:00PM", "06/20/2024 8:00:00AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
+    def test_ampm_compact_iso(self):
+        s = pl.Series("ts", ["2024-01-15 2:30:00PM", "2024-06-20 8:00:00AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+
+    def test_ampm_compact_midnight_noon(self):
+        s = pl.Series("ts", ["01/15/2024 12:00:00AM", "01/15/2024 12:00:00PM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 0   # 12:00AM = midnight
+        assert result[1].hour == 12  # 12:00PM = noon
+
+
 # ─── Edge cases ───────────────────────────────────────────────────────────────
 
 
@@ -330,6 +407,20 @@ class TestEdgeCases:
 
         fmts = infer_ts.infer_format(["2024-01-15 10:30:00.123+0530"])
         assert fmts == ["%Y-%m-%d %H:%M:%S%.f%z"]
+
+        # AM/PM formats
+        fmts = infer_ts.infer_format(["01/15/2024 2:30:00 PM"])
+        assert fmts == ["%m/%d/%Y %I:%M:%S %p"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 2:30:00 PM"])
+        assert fmts == ["%Y-%m-%d %I:%M:%S %p"]
+
+        # AM/PM compact (no space before AM/PM)
+        fmts = infer_ts.infer_format(["01/15/2024 2:30:00PM"])
+        assert fmts == ["%m/%d/%Y %I:%M:%S%p"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 2:30:00PM"])
+        assert fmts == ["%Y-%m-%d %I:%M:%S%p"]
 
 
 # ─── to_datetime API tests ───────────────────────────────────────────────────

@@ -466,4 +466,70 @@ mod tests {
         let result = infer(&input, true);
         assert_eq!(result.len(), Format::all().len());
     }
+
+    // ── 12-hour AM/PM inference ──────────────────────────────────────────────
+
+    #[test]
+    fn infer_slash_us_ampm() {
+        assert_eq!(
+            infer(&vals(&["01/15/2024 2:30:00 PM", "06/20/2024 8:00:00 AM"]), false),
+            vec![std(SlashUS, Space, Hms12, None)]
+        );
+    }
+
+    #[test]
+    fn infer_slash_eu_ampm() {
+        assert_eq!(
+            infer(&vals(&["15/01/2024 2:30:00 PM", "20/06/2024 8:00:00 AM"]), false),
+            vec![std(SlashEU, Space, Hms12, None)]
+        );
+    }
+
+    #[test]
+    fn infer_iso_ampm() {
+        assert_eq!(
+            infer(&vals(&["2024-01-15 2:30:00 PM", "2024-06-20 8:00:00 AM"]), false),
+            vec![std(Iso, Space, Hms12, None)]
+        );
+    }
+
+    #[test]
+    fn infer_ampm_resolves_slash_ambiguity() {
+        // First value ambiguous (day ≤ 12), second resolves to US.
+        assert_eq!(
+            infer(&vals(&["01/02/2024 3:00:00 AM", "03/15/2024 4:00:00 PM"]), false),
+            vec![std(SlashUS, Space, Hms12, None)]
+        );
+    }
+
+    #[test]
+    fn early_exit_ampm() {
+        // ISO+Hms12 is unique on first value; GARBAGE never seen.
+        let input = vals(&["2024-01-15 2:30:00 PM", "GARBAGE"]);
+        assert_eq!(infer(&input, false), vec![std(Iso, Space, Hms12, None)]);
+    }
+
+    // ── 12-hour AM/PM compact (no space before AM/PM) ───────────────────────
+
+    #[test]
+    fn infer_slash_us_ampm_compact() {
+        assert_eq!(
+            infer(&vals(&["01/15/2024 2:30:00PM", "06/20/2024 8:00:00AM"]), false),
+            vec![std(SlashUS, Space, Hms12Compact, None)]
+        );
+    }
+
+    #[test]
+    fn infer_iso_ampm_compact() {
+        assert_eq!(
+            infer(&vals(&["2024-01-15 2:30:00PM", "2024-06-20 8:00:00AM"]), false),
+            vec![std(Iso, Space, Hms12Compact, None)]
+        );
+    }
+
+    #[test]
+    fn early_exit_ampm_compact() {
+        let input = vals(&["2024-01-15 2:30:00PM", "GARBAGE"]);
+        assert_eq!(infer(&input, false), vec![std(Iso, Space, Hms12Compact, None)]);
+    }
 }

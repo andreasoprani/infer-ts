@@ -54,6 +54,10 @@ pub enum TimeFmt {
     HmsFrac,
     /// `HHMMSS` (compact, no colons) - only valid with Compact date
     HmsCompact,
+    /// `H:MM:SS AM/PM` (12-hour, 1-2 digit hour, space before AM/PM)
+    Hms12,
+    /// `H:MM:SSAM/PM` (12-hour, 1-2 digit hour, no space before AM/PM)
+    Hms12Compact,
 }
 
 /// Timezone suffix on a timestamp.
@@ -126,6 +130,8 @@ impl TimeFmt {
             TimeFmt::Hms => "%H:%M:%S",
             TimeFmt::HmsFrac => "%H:%M:%S%.f",
             TimeFmt::HmsCompact => "%H%M%S",
+            TimeFmt::Hms12 => "%I:%M:%S %p",
+            TimeFmt::Hms12Compact => "%I:%M:%S%p",
         }
     }
 }
@@ -269,7 +275,7 @@ impl StandardFormat {
         // All datetime combinations
         for date in DateFmt::all() {
             for sep in [T, Space] {
-                for time in [Hms, HmsFrac, HmsCompact] {
+                for time in [Hms, HmsFrac, HmsCompact, Hms12, Hms12Compact] {
                     for tz in [None, Some(Utc), Some(Offset), Some(OffsetCompact)] {
                         formats.push(StandardFormat::DateTime {
                             date: *date,
@@ -323,6 +329,22 @@ impl StandardFormat {
             } => {
                 match date {
                     DateFmt::Iso => {
+                        // Hms12/Hms12Compact have variable-width hour; can't use parse_iso_like.
+                        if matches!(time, TimeFmt::Hms12 | TimeFmt::Hms12Compact) {
+                            if !matches!((sep, tz), (Separator::Space, None)) {
+                                return false;
+                            }
+                            if value.len() < 11
+                                || parse_iso_date(&value[..10]).is_none()
+                                || value.as_bytes()[10] != b' '
+                            {
+                                return false;
+                            }
+                            let space = *time == TimeFmt::Hms12;
+                            return parse_hms12(&value[11..], space)
+                                == Some(value.len() - 11);
+                        }
+
                         let Some(parsed) = parse_iso_like(value) else {
                             return false;
                         };
@@ -339,6 +361,7 @@ impl StandardFormat {
                             TimeFmt::Hms => !parsed.has_frac,
                             TimeFmt::HmsFrac => parsed.has_frac,
                             TimeFmt::HmsCompact => return false, // Not valid for ISO date
+                            TimeFmt::Hms12 | TimeFmt::Hms12Compact => unreachable!(),
                         };
                         if !frac_matches {
                             return false;
@@ -352,16 +375,30 @@ impl StandardFormat {
                             _ => false,
                         }
                     }
-                    DateFmt::SlashUS => {
-                        // Only valid with space separator, HMS time, no timezone
-                        matches!((sep, time, tz), (Separator::Space, TimeFmt::Hms, None))
-                            && validate_slash_datetime(value, true)
-                    }
-                    DateFmt::SlashEU => {
-                        // Only valid with space separator, HMS time, no timezone
-                        matches!((sep, time, tz), (Separator::Space, TimeFmt::Hms, None))
-                            && validate_slash_datetime(value, false)
-                    }
+                    DateFmt::SlashUS => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_slash_datetime(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_slash_datetime_12h(value, true, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_slash_datetime_12h(value, true, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::SlashEU => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_slash_datetime(value, false)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_slash_datetime_12h(value, false, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_slash_datetime_12h(value, false, false)
+                        }
+                        _ => false,
+                    },
                     DateFmt::Compact => {
                         // Only valid with T separator, compact time, no timezone
                         matches!((sep, time, tz), (Separator::T, TimeFmt::HmsCompact, None))
@@ -601,6 +638,84 @@ fn validate_slash_datetime(s: &str, is_us: bool) -> bool {
     }
 
     time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Parse a 12-hour time with AM/PM suffix (case-insensitive).
+///
+/// When `space_before_ampm` is `true`, expects `H:MM:SS AM` / `HH:MM:SS PM`.
+/// When `false`, expects `H:MM:SSAM` / `HH:MM:SSPM` (no space).
+///
+/// Returns the number of bytes consumed on success, or `None` on failure.
+fn parse_hms12(s: &str, space_before_ampm: bool) -> Option<usize> {
+    let b = s.as_bytes();
+    // Find the colon to determine hour width (1 or 2 digits)
+    let colon1 = if b.len() > 1 && b[1] == b':' {
+        1
+    } else if b.len() > 2 && b[2] == b':' {
+        2
+    } else {
+        return None;
+    };
+
+    let h: u32 = s[..colon1].parse().ok()?;
+    if h < 1 || h > 12 {
+        return None;
+    }
+
+    // MM:SS after first colon
+    let rest = &s[colon1..];
+    if rest.len() < 6 || rest.as_bytes()[0] != b':' || rest.as_bytes()[3] != b':' {
+        return None;
+    }
+    let m: u32 = rest[1..3].parse().ok()?;
+    let sec: u32 = rest[4..6].parse().ok()?;
+    if m > 59 || sec > 59 {
+        return None;
+    }
+
+    // AM/PM suffix: with or without leading space
+    let suffix_start = colon1 + 6;
+    if space_before_ampm {
+        if s.len() < suffix_start + 3 || s.as_bytes()[suffix_start] != b' ' {
+            return None;
+        }
+        let ampm = &s[suffix_start + 1..suffix_start + 3];
+        if !ampm.eq_ignore_ascii_case("AM") && !ampm.eq_ignore_ascii_case("PM") {
+            return None;
+        }
+        Some(suffix_start + 3)
+    } else {
+        if s.len() < suffix_start + 2 {
+            return None;
+        }
+        let ampm = &s[suffix_start..suffix_start + 2];
+        if !ampm.eq_ignore_ascii_case("AM") && !ampm.eq_ignore_ascii_case("PM") {
+            return None;
+        }
+        Some(suffix_start + 2)
+    }
+}
+
+/// Validate a slash datetime with 12-hour time. `is_us` determines mm/dd/yyyy vs dd/mm/yyyy.
+/// `space_before_ampm` controls whether a space is expected before AM/PM.
+fn validate_slash_datetime_12h(s: &str, is_us: bool, space_before_ampm: bool) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((a, b, year)) = parse_slash_date_parts(date_part) else {
+        return false;
+    };
+    let (month, day) = if is_us { (a, b) } else { (b, a) };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
+    // parse_hms12 must consume the entire remaining string
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
 }
 
 // ─── Compact Date / Datetime Validation ──────────────────────────────────────
@@ -1016,5 +1131,143 @@ mod tests {
         assert_none("not a timestamp");
         assert_none("hello world");
         assert_none("2024/01/15"); // slash with yyyy first — not a supported layout
+    }
+
+    // ── 12-hour AM/PM ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn slash_us_ampm_unpadded() {
+        assert_only("01/15/2024 2:30:00 PM", std(SlashUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn slash_us_ampm_padded() {
+        assert_only("01/15/2024 02:30:00 PM", std(SlashUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn slash_eu_ampm() {
+        assert_only("15/01/2024 2:30:00 PM", std(SlashEU, Space, Hms12, None));
+    }
+
+    #[test]
+    fn slash_ampm_ambiguous() {
+        assert_set(
+            "01/02/2024 3:00:00 AM",
+            &[
+                std(SlashUS, Space, Hms12, None),
+                std(SlashEU, Space, Hms12, None),
+            ],
+        );
+    }
+
+    #[test]
+    fn iso_ampm() {
+        assert_only("2024-01-15 2:30:00 PM", std(Iso, Space, Hms12, None));
+    }
+
+    #[test]
+    fn iso_ampm_padded() {
+        assert_only("2024-01-15 02:30:00 PM", std(Iso, Space, Hms12, None));
+    }
+
+    #[test]
+    fn ampm_lowercase() {
+        assert_only("01/15/2024 2:30:00 pm", std(SlashUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn ampm_mixed_case() {
+        assert_only("01/15/2024 2:30:00 Am", std(SlashUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn ampm_hour_12() {
+        assert_only("01/15/2024 12:00:00 PM", std(SlashUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn ampm_hour_12_am() {
+        assert_only("01/15/2024 12:00:00 AM", std(SlashUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn ampm_hour_0_rejected() {
+        assert_none("01/15/2024 0:30:00 PM");
+    }
+
+    #[test]
+    fn ampm_hour_13_rejected() {
+        assert_none("01/15/2024 13:30:00 PM");
+    }
+
+    #[test]
+    fn ampm_t_sep_rejected() {
+        assert_none("2024-01-15T2:30:00 PM");
+    }
+
+    #[test]
+    fn ampm_tz_rejected() {
+        assert_none("2024-01-15 2:30:00 PM+05:00");
+        assert_none("01/15/2024 2:30:00 PMZ");
+    }
+
+    #[test]
+    fn compact_ampm_rejected() {
+        assert_none("20240115 2:30:00 PM");
+    }
+
+    // ── 12-hour AM/PM without space (compact) ────────────────────────────────
+
+    #[test]
+    fn slash_us_ampm_compact_unpadded() {
+        assert_only("01/15/2024 2:30:00PM", std(SlashUS, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn slash_us_ampm_compact_padded() {
+        assert_only("01/15/2024 02:30:00PM", std(SlashUS, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn slash_eu_ampm_compact() {
+        assert_only("15/01/2024 2:30:00PM", std(SlashEU, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn iso_ampm_compact() {
+        assert_only("2024-01-15 2:30:00PM", std(Iso, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn iso_ampm_compact_padded() {
+        assert_only("2024-01-15 02:30:00PM", std(Iso, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn ampm_compact_lowercase() {
+        assert_only("01/15/2024 2:30:00pm", std(SlashUS, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn ampm_compact_hour_12() {
+        assert_only("01/15/2024 12:00:00PM", std(SlashUS, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn ampm_compact_hour_0_rejected() {
+        assert_none("01/15/2024 0:30:00PM");
+    }
+
+    #[test]
+    fn ampm_compact_hour_13_rejected() {
+        assert_none("01/15/2024 13:30:00PM");
+    }
+
+    #[test]
+    fn ampm_spaced_vs_compact_disjoint() {
+        // " PM" (spaced) and "PM" (compact) never overlap
+        assert_only("01/15/2024 2:30:00 PM", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 2:30:00PM", std(SlashUS, Space, Hms12Compact, None));
     }
 }
