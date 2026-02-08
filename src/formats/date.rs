@@ -11,6 +11,10 @@ pub enum DateFmt {
     SlashUS,
     /// `DD/MM/YYYY` (EU convention)
     SlashEU,
+    /// `MM/DD/YY` (US convention, 2-digit year)
+    SlashUSShort,
+    /// `DD/MM/YY` (EU convention, 2-digit year)
+    SlashEUShort,
     /// `YYYYMMDD` (compact, no separators)
     Compact,
 }
@@ -64,6 +68,8 @@ impl DateFmt {
             DateFmt::Iso,
             DateFmt::SlashUS,
             DateFmt::SlashEU,
+            DateFmt::SlashUSShort,
+            DateFmt::SlashEUShort,
             DateFmt::Compact,
         ]
     }
@@ -74,6 +80,8 @@ impl DateFmt {
             DateFmt::Iso => "%Y-%m-%d",
             DateFmt::SlashUS => "%m/%d/%Y",
             DateFmt::SlashEU => "%d/%m/%Y",
+            DateFmt::SlashUSShort => "%m/%d/%y",
+            DateFmt::SlashEUShort => "%d/%m/%y",
             DateFmt::Compact => "%Y%m%d",
         }
     }
@@ -383,6 +391,77 @@ pub(super) fn validate_slash_datetime_12h(s: &str, is_us: bool, space_before_amp
     }
 
     // parse_hms12 must consume the entire remaining string
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+// ─── Short (2-digit year) Slash Date Validation ─────────────────────────────
+
+/// Expand a 2-digit year to 4-digit using POSIX convention: 00–68 → 2000–2068, 69–99 → 1969–1999.
+fn expand_year(yy: i32) -> i32 {
+    if yy <= 68 { 2000 + yy } else { 1900 + yy }
+}
+
+/// Parse slash date parts (AA/BB/CC) for 2-digit year and return (a, b, expanded_year).
+pub(super) fn parse_slash_date_parts_short(s: &str) -> Option<(u32, u32, i32)> {
+    if s.len() != 8 || s.as_bytes()[2] != b'/' || s.as_bytes()[5] != b'/' {
+        return None;
+    }
+    let a: u32 = s[0..2].parse().ok()?;
+    let b: u32 = s[3..5].parse().ok()?;
+    let yy: i32 = s[6..8].parse().ok()?;
+    Some((a, b, expand_year(yy)))
+}
+
+/// Validate a short-year slash date (no time). `is_us` determines mm/dd/yy vs dd/mm/yy.
+pub(super) fn validate_slash_date_short(s: &str, is_us: bool) -> bool {
+    let Some((a, b, year)) = parse_slash_date_parts_short(s) else {
+        return false;
+    };
+    let (month, day) = if is_us { (a, b) } else { (b, a) };
+    NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a short-year slash datetime. `is_us` determines mm/dd/yy vs dd/mm/yy.
+pub(super) fn validate_slash_datetime_short(s: &str, is_us: bool) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((a, b, year)) = parse_slash_date_parts_short(date_part) else {
+        return false;
+    };
+    let (month, day) = if is_us { (a, b) } else { (b, a) };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a short-year slash datetime with 12-hour time.
+pub(super) fn validate_slash_datetime_12h_short(
+    s: &str,
+    is_us: bool,
+    space_before_ampm: bool,
+) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((a, b, year)) = parse_slash_date_parts_short(date_part) else {
+        return false;
+    };
+    let (month, day) = if is_us { (a, b) } else { (b, a) };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
     parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
 }
 

@@ -216,6 +216,36 @@ class TestSlashDates:
         assert result.dtype == pl.Datetime
         assert result[0].hour == 10
 
+    def test_us_slash_date_short_year(self):
+        s = pl.Series("ts", ["01/15/24", "06/20/24"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_eu_slash_date_short_year(self):
+        s = pl.Series("ts", ["15/01/24", "20/06/24"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_us_slash_datetime_short_year(self):
+        s = pl.Series("ts", ["01/15/24 10:30:00", "06/20/24 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_eu_slash_datetime_short_year(self):
+        s = pl.Series("ts", ["15/01/24 10:30:00", "20/06/24 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
 
 # ─── Compact ──────────────────────────────────────────────────────────────────
 
@@ -346,6 +376,22 @@ class TestAMPM:
         assert result.dtype == pl.Datetime
         assert result[0].hour == 14
 
+    def test_us_slash_ampm_short_year(self):
+        s = pl.Series("ts", ["01/15/24 2:30:00 PM", "06/20/24 8:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
+    def test_ampm_compact_short_year(self):
+        s = pl.Series("ts", ["01/15/24 2:30:00PM", "06/20/24 8:00:00AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
     def test_ampm_compact_midnight_noon(self):
         s = pl.Series("ts", ["01/15/2024 12:00:00AM", "01/15/2024 12:00:00PM"])
         result = infer_ts.to_datetime(s)
@@ -407,6 +453,10 @@ class TestEdgeCases:
 
         fmts = infer_ts.infer_format(["2024-01-15 10:30:00.123+0530"])
         assert fmts == ["%Y-%m-%d %H:%M:%S%.f%z"]
+
+        # Short (2-digit) year
+        fmts = infer_ts.infer_format(["01/15/24"])
+        assert fmts == ["%m/%d/%y"]
 
         # AM/PM formats
         fmts = infer_ts.infer_format(["01/15/2024 2:30:00 PM"])

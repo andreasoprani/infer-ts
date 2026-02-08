@@ -608,6 +608,75 @@ mod tests {
         assert_none("01/15/2024 13:30:00PM");
     }
 
+    // ── Short (2-digit year) slash dates ─────────────────────────────────
+
+    #[test]
+    fn slash_short_us_only() {
+        // day=15 > 12 kills EU
+        assert_only("01/15/24", date_only(SlashUSShort));
+    }
+
+    #[test]
+    fn slash_short_eu_only() {
+        // first=15 > 12 kills US
+        assert_only("15/01/24", date_only(SlashEUShort));
+    }
+
+    #[test]
+    fn slash_short_ambiguous_both_match() {
+        // 01/02/24 → US: Jan 2, EU: Feb 1 — both valid
+        assert_set("01/02/24", &[date_only(SlashUSShort), date_only(SlashEUShort)]);
+    }
+
+    #[test]
+    fn slash_short_us_datetime() {
+        assert_only("01/15/24 10:30:00", std(SlashUSShort, Space, Hms, None));
+    }
+
+    #[test]
+    fn slash_short_eu_datetime() {
+        assert_only("15/01/24 10:30:00", std(SlashEUShort, Space, Hms, None));
+    }
+
+    #[test]
+    fn slash_short_us_ampm_spaced() {
+        assert_only("01/15/24 2:30:00 PM", std(SlashUSShort, Space, Hms12, None));
+    }
+
+    #[test]
+    fn slash_short_eu_ampm_spaced() {
+        assert_only("15/01/24 2:30:00 PM", std(SlashEUShort, Space, Hms12, None));
+    }
+
+    #[test]
+    fn slash_short_us_ampm_compact() {
+        assert_only("01/15/24 2:30:00PM", std(SlashUSShort, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn slash_short_eu_ampm_compact() {
+        assert_only("15/01/24 2:30:00PM", std(SlashEUShort, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn slash_short_leap_year_valid() {
+        // 2024 is a leap year (24 → 2024)
+        assert_only("02/29/24", date_only(SlashUSShort));
+    }
+
+    #[test]
+    fn slash_short_leap_year_invalid() {
+        // 2023 is not a leap year (23 → 2023)
+        assert_none("02/29/23");
+    }
+
+    #[test]
+    fn slash_short_no_overlap_with_4digit() {
+        // 8 chars vs 10 chars — should never overlap
+        assert_only("01/15/24", date_only(SlashUSShort));
+        assert_only("01/15/2024", date_only(SlashUS));
+    }
+
     #[test]
     fn ampm_spaced_vs_compact_disjoint() {
         // " PM" (spaced) and "PM" (compact) never overlap

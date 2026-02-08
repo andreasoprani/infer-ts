@@ -82,6 +82,8 @@ impl StandardFormat {
                 DateFmt::Iso => value.len() == 10 && parse_iso_date(value).is_some(),
                 DateFmt::SlashUS => validate_slash_date(value, true),
                 DateFmt::SlashEU => validate_slash_date(value, false),
+                DateFmt::SlashUSShort => validate_slash_date_short(value, true),
+                DateFmt::SlashEUShort => validate_slash_date_short(value, false),
                 DateFmt::Compact => validate_compact_date(value),
             },
             StandardFormat::DateTime {
@@ -159,6 +161,30 @@ impl StandardFormat {
                         }
                         (Separator::Space, TimeFmt::Hms12Compact, None) => {
                             validate_slash_datetime_12h(value, false, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::SlashUSShort => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_slash_datetime_short(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_slash_datetime_12h_short(value, true, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_slash_datetime_12h_short(value, true, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::SlashEUShort => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_slash_datetime_short(value, false)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_slash_datetime_12h_short(value, false, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_slash_datetime_12h_short(value, false, false)
                         }
                         _ => false,
                     },
