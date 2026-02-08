@@ -15,6 +15,10 @@ pub enum DateFmt {
     SlashUSShort,
     /// `DD/MM/YY` (EU convention, 2-digit year)
     SlashEUShort,
+    /// `DD.MM.YYYY` (European convention, dot-separated)
+    DotEU,
+    /// `DD.MM.YY` (European convention, dot-separated, 2-digit year)
+    DotEUShort,
     /// `YYYYMMDD` (compact, no separators)
     Compact,
 }
@@ -70,6 +74,8 @@ impl DateFmt {
             DateFmt::SlashEU,
             DateFmt::SlashUSShort,
             DateFmt::SlashEUShort,
+            DateFmt::DotEU,
+            DateFmt::DotEUShort,
             DateFmt::Compact,
         ]
     }
@@ -82,6 +88,8 @@ impl DateFmt {
             DateFmt::SlashEU => "%d/%m/%Y",
             DateFmt::SlashUSShort => "%m/%d/%y",
             DateFmt::SlashEUShort => "%d/%m/%y",
+            DateFmt::DotEU => "%d.%m.%Y",
+            DateFmt::DotEUShort => "%d.%m.%y",
             DateFmt::Compact => "%Y%m%d",
         }
     }
@@ -457,6 +465,123 @@ pub(super) fn validate_slash_datetime_12h_short(
         return false;
     };
     let (month, day) = if is_us { (a, b) } else { (b, a) };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+// ─── Dot-Separated Date Validation (EU only) ────────────────────────────────
+
+/// Parse dot date parts (DD.MM.YYYY) and return (day, month, year) if valid structure.
+pub(super) fn parse_dot_date_parts(s: &str) -> Option<(u32, u32, i32)> {
+    if s.len() != 10 || s.as_bytes()[2] != b'.' || s.as_bytes()[5] != b'.' {
+        return None;
+    }
+    let day: u32 = s[0..2].parse().ok()?;
+    let month: u32 = s[3..5].parse().ok()?;
+    let year: i32 = s[6..10].parse().ok()?;
+    Some((day, month, year))
+}
+
+/// Parse dot date parts (DD.MM.YY) for 2-digit year and return (day, month, expanded_year).
+pub(super) fn parse_dot_date_parts_short(s: &str) -> Option<(u32, u32, i32)> {
+    if s.len() != 8 || s.as_bytes()[2] != b'.' || s.as_bytes()[5] != b'.' {
+        return None;
+    }
+    let day: u32 = s[0..2].parse().ok()?;
+    let month: u32 = s[3..5].parse().ok()?;
+    let yy: i32 = s[6..8].parse().ok()?;
+    Some((day, month, expand_year(yy)))
+}
+
+/// Validate a dot date (no time). Always DD.MM.YYYY (EU only).
+pub(super) fn validate_dot_date(s: &str) -> bool {
+    let Some((day, month, year)) = parse_dot_date_parts(s) else {
+        return false;
+    };
+    NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a short-year dot date (no time). Always DD.MM.YY (EU only).
+pub(super) fn validate_dot_date_short(s: &str) -> bool {
+    let Some((day, month, year)) = parse_dot_date_parts_short(s) else {
+        return false;
+    };
+    NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a dot datetime. Always DD.MM.YYYY HH:MM:SS (EU only).
+pub(super) fn validate_dot_datetime(s: &str) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((day, month, year)) = parse_dot_date_parts(date_part) else {
+        return false;
+    };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a short-year dot datetime. Always DD.MM.YY HH:MM:SS (EU only).
+pub(super) fn validate_dot_datetime_short(s: &str) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((day, month, year)) = parse_dot_date_parts_short(date_part) else {
+        return false;
+    };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a dot datetime with 12-hour time. Always DD.MM.YYYY (EU only).
+/// `space_before_ampm` controls whether a space is expected before AM/PM.
+pub(super) fn validate_dot_datetime_12h(s: &str, space_before_ampm: bool) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((day, month, year)) = parse_dot_date_parts(date_part) else {
+        return false;
+    };
+
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+/// Validate a short-year dot datetime with 12-hour time. Always DD.MM.YY (EU only).
+pub(super) fn validate_dot_datetime_12h_short(s: &str, space_before_ampm: bool) -> bool {
+    let Some(space_pos) = s.find(' ') else {
+        return false;
+    };
+    let date_part = &s[..space_pos];
+    let time_part = &s[space_pos + 1..];
+
+    let Some((day, month, year)) = parse_dot_date_parts_short(date_part) else {
+        return false;
+    };
 
     if NaiveDate::from_ymd_opt(year, month, day).is_none() {
         return false;

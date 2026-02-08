@@ -84,6 +84,8 @@ impl StandardFormat {
                 DateFmt::SlashEU => validate_slash_date(value, false),
                 DateFmt::SlashUSShort => validate_slash_date_short(value, true),
                 DateFmt::SlashEUShort => validate_slash_date_short(value, false),
+                DateFmt::DotEU => validate_dot_date(value),
+                DateFmt::DotEUShort => validate_dot_date_short(value),
                 DateFmt::Compact => validate_compact_date(value),
             },
             StandardFormat::DateTime {
@@ -185,6 +187,30 @@ impl StandardFormat {
                         }
                         (Separator::Space, TimeFmt::Hms12Compact, None) => {
                             validate_slash_datetime_12h_short(value, false, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::DotEU => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_dot_datetime(value)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_dot_datetime_12h(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_dot_datetime_12h(value, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::DotEUShort => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_dot_datetime_short(value)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_dot_datetime_12h_short(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_dot_datetime_12h_short(value, false)
                         }
                         _ => false,
                     },

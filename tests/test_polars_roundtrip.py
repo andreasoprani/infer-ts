@@ -401,6 +401,79 @@ class TestAMPM:
         assert result[1].hour == 12  # 12:00PM = noon
 
 
+# ─── Dot-separated European dates ─────────────────────────────────────────────
+
+
+class TestDotDates:
+    """Dot-separated European date formats (DD.MM.YYYY, DD.MM.YY)."""
+
+    def test_dot_eu_date(self):
+        s = pl.Series("ts", ["15.01.2024", "20.06.2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_dot_eu_datetime(self):
+        s = pl.Series("ts", ["15.01.2024 10:30:00", "20.06.2024 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_dot_eu_date_short_year(self):
+        s = pl.Series("ts", ["15.01.24", "20.06.24"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_dot_eu_datetime_short_year(self):
+        s = pl.Series("ts", ["15.01.24 10:30:00", "20.06.24 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_dot_eu_ampm(self):
+        s = pl.Series("ts", ["15.01.2024 2:30:00 PM", "20.06.2024 8:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
+    def test_dot_eu_ampm_compact(self):
+        s = pl.Series("ts", ["15.01.2024 2:30:00PM", "20.06.2024 8:00:00AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
+    def test_dot_eu_format_assertions(self):
+        """Verify the inferred format strings for dot-separated dates."""
+        fmts = infer_ts.infer_format(["15.01.2024"])
+        assert fmts == ["%d.%m.%Y"]
+
+        fmts = infer_ts.infer_format(["15.01.24"])
+        assert fmts == ["%d.%m.%y"]
+
+        fmts = infer_ts.infer_format(["15.01.2024 10:30:00"])
+        assert fmts == ["%d.%m.%Y %H:%M:%S"]
+
+        fmts = infer_ts.infer_format(["15.01.24 10:30:00"])
+        assert fmts == ["%d.%m.%y %H:%M:%S"]
+
+        fmts = infer_ts.infer_format(["15.01.2024 2:30:00 PM"])
+        assert fmts == ["%d.%m.%Y %I:%M:%S %p"]
+
+        fmts = infer_ts.infer_format(["15.01.2024 2:30:00PM"])
+        assert fmts == ["%d.%m.%Y %I:%M:%S%p"]
+
+
 # ─── Edge cases ───────────────────────────────────────────────────────────────
 
 

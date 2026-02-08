@@ -37,7 +37,7 @@ later sections depend on earlier ones being solid.
 - [x] Space-separated datetime with timezone: `2024-01-15 10:30:00+05:30`
 - [x] 12-hour time with AM/PM: `01/15/2024 2:30:00 PM`
 - [x] Short (2-digit) year: `01/15/24`, `15/01/24`
-- [ ] Dot-separated European date: `15.01.2024`
+- [x] Dot-separated European date: `15.01.2024`
 - [ ] Month-name formats: `Jan 15, 2024` / `15 Jan 2024`
 - [ ] RFC 2822 / email style: `Mon, 15 Jan 2024 10:30:00 +0530`
 - [ ] Low-digit Unix seconds (1–8 digits, pre-1973)

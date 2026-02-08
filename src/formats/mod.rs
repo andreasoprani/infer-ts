@@ -677,6 +677,66 @@ mod tests {
         assert_only("01/15/2024", date_only(SlashUS));
     }
 
+    // ── Dot-separated European dates ──────────────────────────────────────
+
+    #[test]
+    fn dot_eu_date() {
+        assert_only("15.01.2024", date_only(DotEU));
+    }
+
+    #[test]
+    fn dot_eu_date_unambiguous() {
+        // 01.02.2024 → day=01, month=02 — only DotEU (no DotUS exists)
+        assert_only("01.02.2024", date_only(DotEU));
+    }
+
+    #[test]
+    fn dot_eu_short_date() {
+        assert_only("15.01.24", date_only(DotEUShort));
+    }
+
+    #[test]
+    fn dot_eu_datetime() {
+        assert_only("15.01.2024 10:30:00", std(DotEU, Space, Hms, None));
+    }
+
+    #[test]
+    fn dot_eu_short_datetime() {
+        assert_only("15.01.24 10:30:00", std(DotEUShort, Space, Hms, None));
+    }
+
+    #[test]
+    fn dot_eu_ampm() {
+        assert_only("15.01.2024 2:30:00 PM", std(DotEU, Space, Hms12, None));
+    }
+
+    #[test]
+    fn dot_eu_short_ampm() {
+        assert_only("15.01.24 2:30:00 PM", std(DotEUShort, Space, Hms12, None));
+    }
+
+    #[test]
+    fn dot_eu_ampm_compact() {
+        assert_only("15.01.2024 2:30:00PM", std(DotEU, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn dot_eu_leap_year_valid() {
+        assert_only("29.02.2024", date_only(DotEU));
+    }
+
+    #[test]
+    fn dot_eu_leap_year_invalid() {
+        assert_none("29.02.2023");
+    }
+
+    #[test]
+    fn dot_eu_no_overlap_with_slash() {
+        // Dot and slash formats never overlap
+        assert_only("15.01.2024", date_only(DotEU));
+        assert_only("15/01/2024", date_only(SlashEU));
+    }
+
     #[test]
     fn ampm_spaced_vs_compact_disjoint() {
         // " PM" (spaced) and "PM" (compact) never overlap
