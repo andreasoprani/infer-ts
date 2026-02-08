@@ -40,9 +40,6 @@ later sections depend on earlier ones being solid.
 - [x] Dot-separated European date: `15.01.2024`
 - [x] Month-name formats: `Jan 15, 2024` / `15 Jan 2024`
 - [x] RFC 2822 / email style: `Mon, 15 Jan 2024 10:30:00 +0530`
-- [ ] Low-digit Unix seconds (1–8 digits, pre-1973)
-  - Currently excluded to avoid ambiguity with compact dates
-  - Consider a priority / tiebreaker system or a caller-supplied hint
 
 ---
 
