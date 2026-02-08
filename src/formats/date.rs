@@ -29,6 +29,8 @@ pub enum DateFmt {
     MonthEU,
     /// `15 Jan 24` (EU convention, month name, 2-digit year)
     MonthEUShort,
+    /// `Mon, 15 Jan 2024 10:30:00 +0530` (RFC 2822 / email style)
+    Rfc2822,
 }
 
 /// Separator between date and time components.
@@ -89,6 +91,7 @@ impl DateFmt {
             DateFmt::MonthUSShort,
             DateFmt::MonthEU,
             DateFmt::MonthEUShort,
+            DateFmt::Rfc2822,
         ]
     }
 
@@ -107,6 +110,7 @@ impl DateFmt {
             DateFmt::MonthUSShort => "%b %d, %y",
             DateFmt::MonthEU => "%d %b %Y",
             DateFmt::MonthEUShort => "%d %b %y",
+            DateFmt::Rfc2822 => "%a, %d %b %Y",
         }
     }
 }
@@ -939,4 +943,81 @@ pub(super) fn validate_compact_datetime(s: &str) -> bool {
     let m: u32 = time[2..4].parse().unwrap();
     let sec: u32 = time[4..6].parse().unwrap();
     h <= 23 && m <= 59 && sec <= 59
+}
+
+// ─── RFC 2822 Validation ─────────────────────────────────────────────────────
+
+/// Parse a 3-character weekday abbreviation (case-insensitive) to a `chrono::Weekday`.
+fn parse_dow_abbr(s: &str) -> Option<chrono::Weekday> {
+    use chrono::Weekday::*;
+    if s.len() < 3 {
+        return None;
+    }
+    match s[..3].to_ascii_lowercase().as_str() {
+        "mon" => Some(Mon),
+        "tue" => Some(Tue),
+        "wed" => Some(Wed),
+        "thu" => Some(Thu),
+        "fri" => Some(Fri),
+        "sat" => Some(Sat),
+        "sun" => Some(Sun),
+        _ => None,
+    }
+}
+
+/// Validate an RFC 2822 datetime: `Mon, 15 Jan 2024 10:30:00 +0530` or `+05:30`.
+/// `colon_offset` selects between `±HH:MM` (true) and `±HHMM` (false).
+pub(super) fn validate_rfc2822(s: &str, colon_offset: bool) -> bool {
+    // Minimum: "Mon, 1 Jan 2024 10:30:00 +0000" = 30 bytes
+    if s.len() < 30 {
+        return false;
+    }
+    // Parse day-of-week prefix: "XXX, "
+    let dow = match parse_dow_abbr(s) {
+        Some(w) => w,
+        None => return false,
+    };
+    if s.as_bytes()[3] != b',' || s.as_bytes()[4] != b' ' {
+        return false;
+    }
+    // Parse date portion: "DD Mon YYYY"
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts(&s[5..]) else {
+        return false;
+    };
+    let Some(date) = NaiveDate::from_ymd_opt(year, month, day) else {
+        return false;
+    };
+    // Validate day-of-week matches the actual date
+    use chrono::Datelike;
+    if date.weekday() != dow {
+        return false;
+    }
+    // Space separator after date
+    let pos = 5 + consumed;
+    if pos >= s.len() || s.as_bytes()[pos] != b' ' {
+        return false;
+    }
+    // Parse HH:MM:SS
+    let time_start = pos + 1;
+    if time_start + 8 > s.len() {
+        return false;
+    }
+    if parse_hms(&s[time_start..time_start + 8]).is_none() {
+        return false;
+    }
+    // Space before timezone
+    let tz_space = time_start + 8;
+    if tz_space >= s.len() || s.as_bytes()[tz_space] != b' ' {
+        return false;
+    }
+    // Parse timezone offset
+    let tz_start = tz_space + 1;
+    let Some((tz_len, has_colon)) = parse_tz_offset(&s[tz_start..]) else {
+        return false;
+    };
+    if has_colon != colon_offset {
+        return false;
+    }
+    // Must consume entire string
+    tz_start + tz_len == s.len()
 }

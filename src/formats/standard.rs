@@ -68,6 +68,9 @@ impl StandardFormat {
                 s.push_str(sep.polars_sep());
                 s.push_str(time.polars_time());
                 if let Some(tz) = tz {
+                    if matches!(date, DateFmt::Rfc2822) {
+                        s.push(' ');
+                    }
                     s.push_str(tz.polars_tz());
                 }
                 s
@@ -91,6 +94,7 @@ impl StandardFormat {
                 DateFmt::MonthUSShort => validate_month_us_date_short(value),
                 DateFmt::MonthEU => validate_month_eu_date(value),
                 DateFmt::MonthEUShort => validate_month_eu_date_short(value),
+                DateFmt::Rfc2822 => false, // RFC 2822 always has time + timezone
             },
             StandardFormat::DateTime {
                 date,
@@ -268,6 +272,15 @@ impl StandardFormat {
                         }
                         (Separator::Space, TimeFmt::Hms12Compact, None) => {
                             validate_month_eu_datetime_12h_short(value, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::Rfc2822 => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, Some(Timezone::Offset)) => {
+                            validate_rfc2822(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms, Some(Timezone::OffsetCompact)) => {
+                            validate_rfc2822(value, false)
                         }
                         _ => false,
                     },

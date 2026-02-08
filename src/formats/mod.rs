@@ -873,6 +873,79 @@ mod tests {
         assert_only("15 Jan 24 2:30:00 PM", std(MonthEUShort, Space, Hms12, None));
     }
 
+    // ── RFC 2822 ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn rfc2822_compact_offset() {
+        assert_only(
+            "Mon, 15 Jan 2024 10:30:00 +0530",
+            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+        );
+    }
+
+    #[test]
+    fn rfc2822_colon_offset() {
+        assert_only(
+            "Mon, 15 Jan 2024 10:30:00 +05:30",
+            std(Rfc2822, Space, Hms, Some(Offset)),
+        );
+    }
+
+    #[test]
+    fn rfc2822_negative_offset() {
+        assert_only(
+            "Mon, 15 Jan 2024 10:30:00 -0800",
+            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+        );
+    }
+
+    #[test]
+    fn rfc2822_single_digit_day() {
+        // Jan 1, 2024 is a Monday
+        assert_only(
+            "Mon, 1 Jan 2024 10:30:00 +0000",
+            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+        );
+    }
+
+    #[test]
+    fn rfc2822_case_insensitive_dow_lower() {
+        assert_only(
+            "mon, 15 Jan 2024 10:30:00 +0530",
+            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+        );
+    }
+
+    #[test]
+    fn rfc2822_case_insensitive_dow_upper() {
+        assert_only(
+            "MON, 15 JAN 2024 10:30:00 +0530",
+            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+        );
+    }
+
+    #[test]
+    fn rfc2822_wrong_dow_rejected() {
+        // Jan 15, 2024 was Monday, not Tuesday
+        assert_none("Tue, 15 Jan 2024 10:30:00 +0530");
+    }
+
+    #[test]
+    fn rfc2822_invalid_dow_rejected() {
+        assert_none("Xyz, 15 Jan 2024 10:30:00 +0530");
+    }
+
+    #[test]
+    fn rfc2822_no_overlap_with_month_eu() {
+        // MonthEU: "15 Jan 2024" stays MonthEU
+        assert_only("15 Jan 2024", date_only(MonthEU));
+        // Rfc2822: "Mon, 15 Jan 2024 10:30:00 +0530" is Rfc2822
+        assert_only(
+            "Mon, 15 Jan 2024 10:30:00 +0530",
+            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+        );
+    }
+
     #[test]
     fn ampm_spaced_vs_compact_disjoint() {
         // " PM" (spaced) and "PM" (compact) never overlap

@@ -584,6 +584,45 @@ class TestMonthNameDates:
         assert fmts == ["%b %d, %Y %I:%M:%S%p"]
 
 
+# ─── RFC 2822 ────────────────────────────────────────────────────────────────
+
+
+class TestRfc2822:
+    """RFC 2822 / email-style datetime formats."""
+
+    def test_rfc2822_compact_offset(self):
+        s = pl.Series(
+            "ts", ["Mon, 15 Jan 2024 10:30:00 +0530", "Thu, 20 Jun 2024 08:00:00 -0800"]
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_rfc2822_colon_offset(self):
+        s = pl.Series(
+            "ts",
+            [
+                "Mon, 15 Jan 2024 10:30:00 +05:30",
+                "Thu, 20 Jun 2024 08:00:00 -08:00",
+            ],
+        )
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_rfc2822_format_assertions(self):
+        """Verify the inferred format strings for RFC 2822 dates."""
+        fmts = infer_ts.infer_format(["Mon, 15 Jan 2024 10:30:00 +0530"])
+        assert fmts == ["%a, %d %b %Y %H:%M:%S %z"]
+
+        fmts = infer_ts.infer_format(["Mon, 15 Jan 2024 10:30:00 +05:30"])
+        assert fmts == ["%a, %d %b %Y %H:%M:%S %:z"]
+
+
 # ─── Edge cases ───────────────────────────────────────────────────────────────
 
 
