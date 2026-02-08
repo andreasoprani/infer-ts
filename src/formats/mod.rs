@@ -737,6 +737,142 @@ mod tests {
         assert_only("15/01/2024", date_only(SlashEU));
     }
 
+    // ── Month-name dates ──────────────────────────────────────────────────
+
+    #[test]
+    fn month_us_date() {
+        assert_only("Jan 15, 2024", date_only(MonthUS));
+    }
+
+    #[test]
+    fn month_eu_date() {
+        assert_only("15 Jan 2024", date_only(MonthEU));
+    }
+
+    #[test]
+    fn month_us_date_unpadded_day() {
+        assert_only("Jan 5, 2024", date_only(MonthUS));
+    }
+
+    #[test]
+    fn month_eu_date_unpadded_day() {
+        assert_only("5 Jan 2024", date_only(MonthEU));
+    }
+
+    #[test]
+    fn month_us_short_year() {
+        assert_only("Jan 15, 24", date_only(MonthUSShort));
+    }
+
+    #[test]
+    fn month_eu_short_year() {
+        assert_only("15 Jan 24", date_only(MonthEUShort));
+    }
+
+    #[test]
+    fn month_us_datetime() {
+        assert_only("Jan 15, 2024 10:30:00", std(MonthUS, Space, Hms, None));
+    }
+
+    #[test]
+    fn month_eu_datetime() {
+        assert_only("15 Jan 2024 10:30:00", std(MonthEU, Space, Hms, None));
+    }
+
+    #[test]
+    fn month_us_short_year_datetime() {
+        assert_only("Jan 15, 24 10:30:00", std(MonthUSShort, Space, Hms, None));
+    }
+
+    #[test]
+    fn month_eu_short_year_datetime() {
+        assert_only("15 Jan 24 10:30:00", std(MonthEUShort, Space, Hms, None));
+    }
+
+    #[test]
+    fn month_us_ampm() {
+        assert_only("Jan 15, 2024 2:30:00 PM", std(MonthUS, Space, Hms12, None));
+    }
+
+    #[test]
+    fn month_eu_ampm() {
+        assert_only("15 Jan 2024 2:30:00 PM", std(MonthEU, Space, Hms12, None));
+    }
+
+    #[test]
+    fn month_us_ampm_compact() {
+        assert_only("Jan 15, 2024 2:30:00PM", std(MonthUS, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn month_eu_ampm_compact() {
+        assert_only("15 Jan 2024 2:30:00PM", std(MonthEU, Space, Hms12Compact, None));
+    }
+
+    #[test]
+    fn month_us_case_insensitive_lower() {
+        assert_only("jan 15, 2024", date_only(MonthUS));
+    }
+
+    #[test]
+    fn month_us_case_insensitive_upper() {
+        assert_only("JAN 15, 2024", date_only(MonthUS));
+    }
+
+    #[test]
+    fn month_eu_case_insensitive() {
+        assert_only("15 jan 2024", date_only(MonthEU));
+    }
+
+    #[test]
+    fn month_us_leap_year_valid() {
+        assert_only("Feb 29, 2024", date_only(MonthUS));
+    }
+
+    #[test]
+    fn month_us_leap_year_invalid() {
+        assert_none("Feb 29, 2023");
+    }
+
+    #[test]
+    fn month_eu_leap_year_valid() {
+        assert_only("29 Feb 2024", date_only(MonthEU));
+    }
+
+    #[test]
+    fn month_eu_leap_year_invalid() {
+        assert_none("29 Feb 2023");
+    }
+
+    #[test]
+    fn month_invalid_name_rejected() {
+        assert_none("Xyz 15, 2024");
+    }
+
+    #[test]
+    fn month_us_no_overlap_with_other_families() {
+        // Month-name formats start with a letter, so no overlap with slash/dot/iso/compact
+        assert_only("Jan 15, 2024", date_only(MonthUS));
+        assert_only("01/15/2024", date_only(SlashUS));
+    }
+
+    #[test]
+    fn month_eu_no_overlap_with_slash() {
+        // EU month-name has month name, slash EU has digits
+        assert_only("15 Jan 2024", date_only(MonthEU));
+        assert_only("15/01/2024", date_only(SlashEU));
+    }
+
+    #[test]
+    fn month_us_short_ampm() {
+        assert_only("Jan 15, 24 2:30:00 PM", std(MonthUSShort, Space, Hms12, None));
+    }
+
+    #[test]
+    fn month_eu_short_ampm() {
+        assert_only("15 Jan 24 2:30:00 PM", std(MonthEUShort, Space, Hms12, None));
+    }
+
     #[test]
     fn ampm_spaced_vs_compact_disjoint() {
         // " PM" (spaced) and "PM" (compact) never overlap

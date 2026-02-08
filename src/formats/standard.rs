@@ -87,6 +87,10 @@ impl StandardFormat {
                 DateFmt::DotEU => validate_dot_date(value),
                 DateFmt::DotEUShort => validate_dot_date_short(value),
                 DateFmt::Compact => validate_compact_date(value),
+                DateFmt::MonthUS => validate_month_us_date(value),
+                DateFmt::MonthUSShort => validate_month_us_date_short(value),
+                DateFmt::MonthEU => validate_month_eu_date(value),
+                DateFmt::MonthEUShort => validate_month_eu_date_short(value),
             },
             StandardFormat::DateTime {
                 date,
@@ -219,6 +223,54 @@ impl StandardFormat {
                         matches!((sep, time, tz), (Separator::T, TimeFmt::HmsCompact, None))
                             && validate_compact_datetime(value)
                     }
+                    DateFmt::MonthUS => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_month_us_datetime(value)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_month_us_datetime_12h(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_month_us_datetime_12h(value, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::MonthUSShort => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_month_us_datetime_short(value)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_month_us_datetime_12h_short(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_month_us_datetime_12h_short(value, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::MonthEU => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_month_eu_datetime(value)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_month_eu_datetime_12h(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_month_eu_datetime_12h(value, false)
+                        }
+                        _ => false,
+                    },
+                    DateFmt::MonthEUShort => match (sep, time, tz) {
+                        (Separator::Space, TimeFmt::Hms, None) => {
+                            validate_month_eu_datetime_short(value)
+                        }
+                        (Separator::Space, TimeFmt::Hms12, None) => {
+                            validate_month_eu_datetime_12h_short(value, true)
+                        }
+                        (Separator::Space, TimeFmt::Hms12Compact, None) => {
+                            validate_month_eu_datetime_12h_short(value, false)
+                        }
+                        _ => false,
+                    },
                 }
             }
         }

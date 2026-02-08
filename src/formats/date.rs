@@ -21,6 +21,14 @@ pub enum DateFmt {
     DotEUShort,
     /// `YYYYMMDD` (compact, no separators)
     Compact,
+    /// `Jan 15, 2024` (US convention, month name)
+    MonthUS,
+    /// `Jan 15, 24` (US convention, month name, 2-digit year)
+    MonthUSShort,
+    /// `15 Jan 2024` (EU convention, month name)
+    MonthEU,
+    /// `15 Jan 24` (EU convention, month name, 2-digit year)
+    MonthEUShort,
 }
 
 /// Separator between date and time components.
@@ -77,6 +85,10 @@ impl DateFmt {
             DateFmt::DotEU,
             DateFmt::DotEUShort,
             DateFmt::Compact,
+            DateFmt::MonthUS,
+            DateFmt::MonthUSShort,
+            DateFmt::MonthEU,
+            DateFmt::MonthEUShort,
         ]
     }
 
@@ -91,6 +103,10 @@ impl DateFmt {
             DateFmt::DotEU => "%d.%m.%Y",
             DateFmt::DotEUShort => "%d.%m.%y",
             DateFmt::Compact => "%Y%m%d",
+            DateFmt::MonthUS => "%b %d, %Y",
+            DateFmt::MonthUSShort => "%b %d, %y",
+            DateFmt::MonthEU => "%d %b %Y",
+            DateFmt::MonthEUShort => "%d %b %y",
         }
     }
 }
@@ -602,6 +618,310 @@ pub(super) fn validate_compact_date(s: &str) -> bool {
     let day: u32 = s[6..8].parse().unwrap();
     NaiveDate::from_ymd_opt(year, month, day).is_some()
 }
+
+// ─── Month-Name Date Validation ──────────────────────────────────────────────
+
+/// Parse a 3-character month abbreviation (case-insensitive) to a 1-based month number.
+fn parse_month_abbr(s: &str) -> Option<u32> {
+    if s.len() < 3 {
+        return None;
+    }
+    match s[..3].to_ascii_lowercase().as_str() {
+        "jan" => Some(1),
+        "feb" => Some(2),
+        "mar" => Some(3),
+        "apr" => Some(4),
+        "may" => Some(5),
+        "jun" => Some(6),
+        "jul" => Some(7),
+        "aug" => Some(8),
+        "sep" => Some(9),
+        "oct" => Some(10),
+        "nov" => Some(11),
+        "dec" => Some(12),
+        _ => None,
+    }
+}
+
+/// Parse US month-name date `Jan DD, YYYY` and return (day, month, year, bytes_consumed).
+pub(super) fn parse_month_us_date_parts(s: &str) -> Option<(u32, u32, i32, usize)> {
+    // Minimum: "Jan 1, 2024" = 11 bytes
+    if s.len() < 11 {
+        return None;
+    }
+    let month = parse_month_abbr(s)?;
+    if s.as_bytes()[3] != b' ' {
+        return None;
+    }
+    // Find comma for day
+    let comma = s[4..].find(',')?;
+    let comma_pos = 4 + comma;
+    let day: u32 = s[4..comma_pos].parse().ok()?;
+    // Space after comma, then 4-digit year
+    if comma_pos + 1 >= s.len() || s.as_bytes()[comma_pos + 1] != b' ' {
+        return None;
+    }
+    let year_start = comma_pos + 2;
+    if year_start + 4 > s.len() {
+        return None;
+    }
+    let year_str = &s[year_start..year_start + 4];
+    if !year_str.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let year: i32 = year_str.parse().ok()?;
+    Some((day, month, year, year_start + 4))
+}
+
+/// Parse US month-name date with 2-digit year `Jan DD, YY`.
+pub(super) fn parse_month_us_date_parts_short(s: &str) -> Option<(u32, u32, i32, usize)> {
+    // Minimum: "Jan 1, 24" = 9 bytes
+    if s.len() < 9 {
+        return None;
+    }
+    let month = parse_month_abbr(s)?;
+    if s.as_bytes()[3] != b' ' {
+        return None;
+    }
+    let comma = s[4..].find(',')?;
+    let comma_pos = 4 + comma;
+    let day: u32 = s[4..comma_pos].parse().ok()?;
+    if comma_pos + 1 >= s.len() || s.as_bytes()[comma_pos + 1] != b' ' {
+        return None;
+    }
+    let year_start = comma_pos + 2;
+    if year_start + 2 > s.len() {
+        return None;
+    }
+    let year_str = &s[year_start..year_start + 2];
+    if !year_str.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let yy: i32 = year_str.parse().ok()?;
+    Some((day, month, expand_year(yy), year_start + 2))
+}
+
+/// Parse EU month-name date `DD Mon YYYY` and return (day, month, year, bytes_consumed).
+pub(super) fn parse_month_eu_date_parts(s: &str) -> Option<(u32, u32, i32, usize)> {
+    // Minimum: "1 Jan 2024" = 10 bytes
+    if s.len() < 10 {
+        return None;
+    }
+    // Find first space to get day
+    let space1 = s.find(' ')?;
+    if space1 == 0 || space1 > 2 {
+        return None;
+    }
+    let day: u32 = s[..space1].parse().ok()?;
+    // Month name after first space
+    let month_start = space1 + 1;
+    if month_start + 3 > s.len() {
+        return None;
+    }
+    let month = parse_month_abbr(&s[month_start..])?;
+    // Space after month name
+    let after_month = month_start + 3;
+    if after_month >= s.len() || s.as_bytes()[after_month] != b' ' {
+        return None;
+    }
+    // 4-digit year
+    let year_start = after_month + 1;
+    if year_start + 4 > s.len() {
+        return None;
+    }
+    let year_str = &s[year_start..year_start + 4];
+    if !year_str.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let year: i32 = year_str.parse().ok()?;
+    Some((day, month, year, year_start + 4))
+}
+
+/// Parse EU month-name date with 2-digit year `DD Mon YY`.
+pub(super) fn parse_month_eu_date_parts_short(s: &str) -> Option<(u32, u32, i32, usize)> {
+    // Minimum: "1 Jan 24" = 8 bytes
+    if s.len() < 8 {
+        return None;
+    }
+    let space1 = s.find(' ')?;
+    if space1 == 0 || space1 > 2 {
+        return None;
+    }
+    let day: u32 = s[..space1].parse().ok()?;
+    let month_start = space1 + 1;
+    if month_start + 3 > s.len() {
+        return None;
+    }
+    let month = parse_month_abbr(&s[month_start..])?;
+    let after_month = month_start + 3;
+    if after_month >= s.len() || s.as_bytes()[after_month] != b' ' {
+        return None;
+    }
+    let year_start = after_month + 1;
+    if year_start + 2 > s.len() {
+        return None;
+    }
+    let year_str = &s[year_start..year_start + 2];
+    if !year_str.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let yy: i32 = year_str.parse().ok()?;
+    Some((day, month, expand_year(yy), year_start + 2))
+}
+
+/// Validate a US month-name date (no time): `Jan 15, 2024`.
+pub(super) fn validate_month_us_date(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_us_date_parts(s) else {
+        return false;
+    };
+    consumed == s.len() && NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a US month-name date with short year (no time): `Jan 15, 24`.
+pub(super) fn validate_month_us_date_short(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_us_date_parts_short(s) else {
+        return false;
+    };
+    consumed == s.len() && NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a EU month-name date (no time): `15 Jan 2024`.
+pub(super) fn validate_month_eu_date(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts(s) else {
+        return false;
+    };
+    consumed == s.len() && NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a EU month-name date with short year (no time): `15 Jan 24`.
+pub(super) fn validate_month_eu_date_short(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts_short(s) else {
+        return false;
+    };
+    consumed == s.len() && NaiveDate::from_ymd_opt(year, month, day).is_some()
+}
+
+/// Validate a US month-name datetime: `Jan 15, 2024 10:30:00`.
+pub(super) fn validate_month_us_datetime(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_us_date_parts(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a US month-name datetime with short year: `Jan 15, 24 10:30:00`.
+pub(super) fn validate_month_us_datetime_short(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_us_date_parts_short(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a EU month-name datetime: `15 Jan 2024 10:30:00`.
+pub(super) fn validate_month_eu_datetime(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a EU month-name datetime with short year: `15 Jan 24 10:30:00`.
+pub(super) fn validate_month_eu_datetime_short(s: &str) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts_short(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    time_part.len() == 8 && parse_hms(time_part).is_some()
+}
+
+/// Validate a US month-name datetime with 12-hour time: `Jan 15, 2024 2:30:00 PM`.
+pub(super) fn validate_month_us_datetime_12h(s: &str, space_before_ampm: bool) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_us_date_parts(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+/// Validate a US month-name datetime with 12-hour time and short year.
+pub(super) fn validate_month_us_datetime_12h_short(s: &str, space_before_ampm: bool) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_us_date_parts_short(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+/// Validate a EU month-name datetime with 12-hour time: `15 Jan 2024 2:30:00 PM`.
+pub(super) fn validate_month_eu_datetime_12h(s: &str, space_before_ampm: bool) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+/// Validate a EU month-name datetime with 12-hour time and short year.
+pub(super) fn validate_month_eu_datetime_12h_short(s: &str, space_before_ampm: bool) -> bool {
+    let Some((day, month, year, consumed)) = parse_month_eu_date_parts_short(s) else {
+        return false;
+    };
+    if consumed >= s.len() || s.as_bytes()[consumed] != b' ' {
+        return false;
+    }
+    if NaiveDate::from_ymd_opt(year, month, day).is_none() {
+        return false;
+    }
+    let time_part = &s[consumed + 1..];
+    parse_hms12(time_part, space_before_ampm) == Some(time_part.len())
+}
+
+// ─── Compact Date / Datetime Validation ──────────────────────────────────────
 
 pub(super) fn validate_compact_datetime(s: &str) -> bool {
     // YYYYMMDDThhmmss  →  exactly 15 bytes

@@ -474,6 +474,116 @@ class TestDotDates:
         assert fmts == ["%d.%m.%Y %I:%M:%S%p"]
 
 
+# ─── Month-name dates ────────────────────────────────────────────────────────
+
+
+class TestMonthNameDates:
+    """Month-name date formats (Jan 15, 2024 / 15 Jan 2024)."""
+
+    def test_month_us_date(self):
+        s = pl.Series("ts", ["Jan 15, 2024", "Jun 20, 2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_month_eu_date(self):
+        s = pl.Series("ts", ["15 Jan 2024", "20 Jun 2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_month_us_datetime(self):
+        s = pl.Series("ts", ["Jan 15, 2024 10:30:00", "Jun 20, 2024 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+        assert result[0].minute == 30
+
+    def test_month_eu_datetime(self):
+        s = pl.Series("ts", ["15 Jan 2024 10:30:00", "20 Jun 2024 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_month_us_date_short_year(self):
+        s = pl.Series("ts", ["Jan 15, 24", "Jun 20, 24"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_month_eu_date_short_year(self):
+        s = pl.Series("ts", ["15 Jan 24", "20 Jun 24"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result[0].month == 1
+        assert result[0].day == 15
+
+    def test_month_us_datetime_short_year(self):
+        s = pl.Series("ts", ["Jan 15, 24 10:30:00", "Jun 20, 24 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_month_eu_datetime_short_year(self):
+        s = pl.Series("ts", ["15 Jan 24 10:30:00", "20 Jun 24 08:00:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 10
+
+    def test_month_us_ampm(self):
+        s = pl.Series("ts", ["Jan 15, 2024 2:30:00 PM", "Jun 20, 2024 8:00:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
+    def test_month_us_ampm_compact(self):
+        s = pl.Series("ts", ["Jan 15, 2024 2:30:00PM", "Jun 20, 2024 8:00:00AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert result[0].hour == 14
+        assert result[0].minute == 30
+
+    def test_month_name_format_assertions(self):
+        """Verify the inferred format strings for month-name dates."""
+        fmts = infer_ts.infer_format(["Jan 15, 2024"])
+        assert fmts == ["%b %d, %Y"]
+
+        fmts = infer_ts.infer_format(["15 Jan 2024"])
+        assert fmts == ["%d %b %Y"]
+
+        fmts = infer_ts.infer_format(["Jan 15, 24"])
+        assert fmts == ["%b %d, %y"]
+
+        fmts = infer_ts.infer_format(["15 Jan 24"])
+        assert fmts == ["%d %b %y"]
+
+        fmts = infer_ts.infer_format(["Jan 15, 2024 10:30:00"])
+        assert fmts == ["%b %d, %Y %H:%M:%S"]
+
+        fmts = infer_ts.infer_format(["15 Jan 2024 10:30:00"])
+        assert fmts == ["%d %b %Y %H:%M:%S"]
+
+        fmts = infer_ts.infer_format(["Jan 15, 2024 2:30:00 PM"])
+        assert fmts == ["%b %d, %Y %I:%M:%S %p"]
+
+        fmts = infer_ts.infer_format(["Jan 15, 2024 2:30:00PM"])
+        assert fmts == ["%b %d, %Y %I:%M:%S%p"]
+
+
 # ─── Edge cases ───────────────────────────────────────────────────────────────
 
 
