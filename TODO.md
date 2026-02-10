@@ -43,7 +43,31 @@ later sections depend on earlier ones being solid.
 
 ---
 
-## v0.4 – Performance & distribution
+## v0.4 – Compositional parsing refactoring
+
+**See**: [REFACTORING_PLAN.md](./REFACTORING_PLAN.md) for detailed step-by-step plan
+
+- [ ] **Replace explicit validation with compositional parsing**
+  - Remove 200+ line `validates()` method with nested match statements
+  - Implement compositional `parse()` that composes date/separator/time/timezone
+  - Accept all structurally valid combinations (remove artificial restrictions)
+- [ ] **Lazy domain initialization for CSP**
+  - Remove `Format::all()` - no more pre-generating ~500 format combinations
+  - Add `Format::parse()` for on-demand format discovery
+  - Hybrid approach: parse first value to construct domain, validate subsequent values
+  - Performance: O(10) instead of O(500) per value after first
+- [ ] **Update documentation**
+  - Document lazy domain initialization approach
+  - Update CSP explanation to reflect new algorithm
+  - Remove outdated comments about pre-enumeration
+- [ ] **Validation & testing**
+  - Ensure Polars compatibility for all format combinations
+  - Verify performance improvements with benchmarks
+  - Preserve all existing test coverage
+
+---
+
+## v0.5 – Performance & distribution
 
 - [ ] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour
 - [ ] Accept a Polars Series directly via PyO3 (avoid the Python list → `Vec`
@@ -54,7 +78,7 @@ later sections depend on earlier ones being solid.
 
 ---
 
-## v0.5 – Polars plugin (single-pass infer + cast)
+## v0.6 – Polars plugin (single-pass infer + cast)
 
 - [ ] **Single-pass datetime parsing**
   - Infer format and cast to datetime in one pass over the data
