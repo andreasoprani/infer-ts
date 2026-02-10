@@ -25,5 +25,10 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["polars", "pytest"]
 
+[dependency-groups]
+dev = [
+    "basedpyright>=1.37.4",
+]
+
 [tool.pyright]
 extraPaths = ["python"]

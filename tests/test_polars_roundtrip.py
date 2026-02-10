@@ -11,10 +11,25 @@ Coverage (per TODO v0.1):
 - Unix epoch (seconds, ms, µs, ns)
 """
 
+from datetime import date, datetime
+
+import infer_ts
 import polars as pl
 import pytest
 
-import infer_ts
+
+def _dt(s: pl.Series, idx: int) -> datetime:
+    """Extract element from series, asserting it's a datetime."""
+    v = s[idx]  # pyright: ignore[reportAny]
+    assert isinstance(v, datetime)
+    return v
+
+
+def _d(s: pl.Series, idx: int) -> date:
+    """Extract element from series, asserting it's a date (or datetime)."""
+    v = s[idx]  # pyright: ignore[reportAny]
+    assert isinstance(v, date)
+    return v
 
 
 # ─── ISO 8601 ─────────────────────────────────────────────────────────────────
@@ -28,37 +43,32 @@ class TestISO8601:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _dt(result, 0)
+        assert v.year == 2024
+        assert v.month == 1
+        assert v.day == 15
 
     def test_iso8601_utc(self):
         s = pl.Series("ts", ["2024-01-15T10:30:00Z", "2024-06-20T08:00:00Z"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[1].month == 6
+        assert _dt(result, 1).month == 6
 
     def test_iso8601_with_offset(self):
-        s = pl.Series(
-            "ts", ["2024-01-15T10:30:00+05:30", "2024-06-20T08:00:00-08:00"]
-        )
+        s = pl.Series("ts", ["2024-01-15T10:30:00+05:30", "2024-06-20T08:00:00-08:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
 
     def test_iso8601_fractional(self):
-        s = pl.Series(
-            "ts", ["2024-01-15T10:30:00.123456", "2024-06-20T08:00:00.999"]
-        )
+        s = pl.Series("ts", ["2024-01-15T10:30:00.123456", "2024-06-20T08:00:00.999"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
 
     def test_iso8601_fractional_utc(self):
-        s = pl.Series(
-            "ts", ["2024-01-15T10:30:00.123Z", "2024-06-20T08:00:00.456789Z"]
-        )
+        s = pl.Series("ts", ["2024-01-15T10:30:00.123Z", "2024-06-20T08:00:00.456789Z"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
@@ -77,9 +87,7 @@ class TestISO8601:
 
     def test_iso8601_with_compact_offset(self):
         """Compact offset without colon (e.g., +0530 instead of +05:30)."""
-        s = pl.Series(
-            "ts", ["2024-01-15T10:30:00+0530", "2024-06-20T08:00:00-0800"]
-        )
+        s = pl.Series("ts", ["2024-01-15T10:30:00+0530", "2024-06-20T08:00:00-0800"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
@@ -109,13 +117,12 @@ class TestSpaceSeparated:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 10
+        assert v.minute == 30
 
     def test_space_datetime_fractional(self):
-        s = pl.Series(
-            "ts", ["2024-01-15 10:30:00.123456", "2024-06-20 08:00:00.789"]
-        )
+        s = pl.Series("ts", ["2024-01-15 10:30:00.123456", "2024-06-20 08:00:00.789"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
@@ -125,28 +132,22 @@ class TestSpaceSeparated:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_space_offset(self):
-        s = pl.Series(
-            "ts", ["2024-01-15 10:30:00+05:30", "2024-06-20 08:00:00-08:00"]
-        )
+        s = pl.Series("ts", ["2024-01-15 10:30:00+05:30", "2024-06-20 08:00:00-08:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
 
     def test_space_offset_compact(self):
-        s = pl.Series(
-            "ts", ["2024-01-15 10:30:00+0530", "2024-06-20 08:00:00-0800"]
-        )
+        s = pl.Series("ts", ["2024-01-15 10:30:00+0530", "2024-06-20 08:00:00-0800"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
 
     def test_space_fractional_utc(self):
-        s = pl.Series(
-            "ts", ["2024-01-15 10:30:00.123Z", "2024-06-20 08:00:00.456789Z"]
-        )
+        s = pl.Series("ts", ["2024-01-15 10:30:00.123Z", "2024-06-20 08:00:00.456789Z"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
@@ -189,8 +190,9 @@ class TestSlashDates:
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
         # Verify it parsed as mm/dd (US): 01/15 = Jan 15
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_eu_slash_date(self):
         # first component > 12 ensures unambiguous EU format
@@ -199,52 +201,55 @@ class TestSlashDates:
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
         # Verify it parsed as dd/mm (EU): 15/01 = Jan 15
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_us_slash_datetime(self):
         s = pl.Series("ts", ["01/15/2024 10:30:00", "06/20/2024 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_eu_slash_datetime(self):
         s = pl.Series("ts", ["15/01/2024 10:30:00", "20/06/2024 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_us_slash_date_short_year(self):
         s = pl.Series("ts", ["01/15/24", "06/20/24"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_eu_slash_date_short_year(self):
         s = pl.Series("ts", ["15/01/24", "20/06/24"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_us_slash_datetime_short_year(self):
         s = pl.Series("ts", ["01/15/24 10:30:00", "06/20/24 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_eu_slash_datetime_short_year(self):
         s = pl.Series("ts", ["15/01/24 10:30:00", "20/06/24 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
 
 # ─── Compact ──────────────────────────────────────────────────────────────────
@@ -258,9 +263,10 @@ class TestCompact:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].year == 2024
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.year == 2024
+        assert v.month == 1
+        assert v.day == 15
 
     def test_compact_datetime(self):
         s = pl.Series("ts", ["20240115T103000", "20240620T080000"])
@@ -281,7 +287,7 @@ class TestUnixEpoch:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
+        assert _dt(result, 0).year == 2024
 
     def test_unix_milliseconds(self):
         # 1705312200000 = 2024-01-15 10:30:00 UTC (ms)
@@ -289,7 +295,7 @@ class TestUnixEpoch:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
+        assert _dt(result, 0).year == 2024
 
     def test_unix_microseconds(self):
         # 1705312200000000 = 2024-01-15 10:30:00 UTC (µs)
@@ -297,7 +303,7 @@ class TestUnixEpoch:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
+        assert _dt(result, 0).year == 2024
 
     def test_unix_nanoseconds(self):
         # 1705312200000000000 = 2024-01-15 10:30:00 UTC (ns)
@@ -305,7 +311,7 @@ class TestUnixEpoch:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
+        assert _dt(result, 0).year == 2024
 
 
 # ─── 12-hour AM/PM ────────────────────────────────────────────────────────────
@@ -319,46 +325,48 @@ class TestAMPM:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14  # 2:30 PM = 14:30
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14  # 2:30 PM = 14:30
+        assert v.minute == 30
 
     def test_eu_slash_ampm(self):
         s = pl.Series("ts", ["15/01/2024 2:30:00 PM", "20/06/2024 8:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _dt(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_iso_ampm(self):
         s = pl.Series("ts", ["2024-01-15 2:30:00 PM", "2024-06-20 8:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
+        assert _dt(result, 0).hour == 14
 
     def test_ampm_padded_hour(self):
         s = pl.Series("ts", ["01/15/2024 02:30:00 PM", "06/20/2024 08:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
+        assert _dt(result, 0).hour == 14
 
     def test_ampm_midnight_noon(self):
         s = pl.Series("ts", ["01/15/2024 12:00:00 AM", "01/15/2024 12:00:00 PM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 0   # 12:00 AM = midnight
-        assert result[1].hour == 12  # 12:00 PM = noon
+        assert _dt(result, 0).hour == 0  # 12:00 AM = midnight
+        assert _dt(result, 1).hour == 12  # 12:00 PM = noon
 
     def test_ampm_case_insensitive(self):
         s = pl.Series("ts", ["01/15/2024 2:30:00 pm", "01/15/2024 3:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[1].hour == 3
+        assert _dt(result, 0).hour == 14
+        assert _dt(result, 1).hour == 3
 
     def test_ampm_compact_us_slash(self):
         """AM/PM without space before suffix (e.g. 2:30:00PM)."""
@@ -366,39 +374,42 @@ class TestAMPM:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_ampm_compact_iso(self):
         s = pl.Series("ts", ["2024-01-15 2:30:00PM", "2024-06-20 8:00:00AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
+        assert _dt(result, 0).hour == 14
 
     def test_us_slash_ampm_short_year(self):
         s = pl.Series("ts", ["01/15/24 2:30:00 PM", "06/20/24 8:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_ampm_compact_short_year(self):
         s = pl.Series("ts", ["01/15/24 2:30:00PM", "06/20/24 8:00:00AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_ampm_compact_midnight_noon(self):
         s = pl.Series("ts", ["01/15/2024 12:00:00AM", "01/15/2024 12:00:00PM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 0   # 12:00AM = midnight
-        assert result[1].hour == 12  # 12:00PM = noon
+        assert _dt(result, 0).hour == 0  # 12:00AM = midnight
+        assert _dt(result, 1).hour == 12  # 12:00PM = noon
 
 
 # ─── Dot-separated European dates ─────────────────────────────────────────────
@@ -412,46 +423,50 @@ class TestDotDates:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_dot_eu_datetime(self):
         s = pl.Series("ts", ["15.01.2024 10:30:00", "20.06.2024 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_dot_eu_date_short_year(self):
         s = pl.Series("ts", ["15.01.24", "20.06.24"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_dot_eu_datetime_short_year(self):
         s = pl.Series("ts", ["15.01.24 10:30:00", "20.06.24 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_dot_eu_ampm(self):
         s = pl.Series("ts", ["15.01.2024 2:30:00 PM", "20.06.2024 8:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_dot_eu_ampm_compact(self):
         s = pl.Series("ts", ["15.01.2024 2:30:00PM", "20.06.2024 8:00:00AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_dot_eu_format_assertions(self):
         """Verify the inferred format strings for dot-separated dates."""
@@ -485,77 +500,84 @@ class TestMonthNameDates:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_month_eu_date(self):
         s = pl.Series("ts", ["15 Jan 2024", "20 Jun 2024"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_month_us_datetime(self):
         s = pl.Series("ts", ["Jan 15, 2024 10:30:00", "Jun 20, 2024 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 10
+        assert v.minute == 30
 
     def test_month_eu_datetime(self):
         s = pl.Series("ts", ["15 Jan 2024 10:30:00", "20 Jun 2024 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_month_us_date_short_year(self):
         s = pl.Series("ts", ["Jan 15, 24", "Jun 20, 24"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_month_eu_date_short_year(self):
         s = pl.Series("ts", ["15 Jan 24", "20 Jun 24"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_month_us_datetime_short_year(self):
         s = pl.Series("ts", ["Jan 15, 24 10:30:00", "Jun 20, 24 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_month_eu_datetime_short_year(self):
         s = pl.Series("ts", ["15 Jan 24 10:30:00", "20 Jun 24 08:00:00"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 10
+        assert _dt(result, 0).hour == 10
 
     def test_month_us_ampm(self):
         s = pl.Series("ts", ["Jan 15, 2024 2:30:00 PM", "Jun 20, 2024 8:00:00 AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_month_us_ampm_compact(self):
         s = pl.Series("ts", ["Jan 15, 2024 2:30:00PM", "Jun 20, 2024 8:00:00AM"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].hour == 14
-        assert result[0].minute == 30
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
 
     def test_month_name_format_assertions(self):
         """Verify the inferred format strings for month-name dates."""
@@ -597,8 +619,9 @@ class TestRfc2822:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _dt(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_rfc2822_colon_offset(self):
         s = pl.Series(
@@ -611,8 +634,9 @@ class TestRfc2822:
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
-        assert result[0].month == 1
-        assert result[0].day == 15
+        v = _dt(result, 0)
+        assert v.month == 1
+        assert v.day == 15
 
     def test_rfc2822_format_assertions(self):
         """Verify the inferred format strings for RFC 2822 dates."""
@@ -705,14 +729,14 @@ class TestToDatetimeAPI:
         """ValueError when no format matches."""
         s = pl.Series("ts", ["not a timestamp"])
         with pytest.raises(ValueError, match="No timestamp format"):
-            infer_ts.to_datetime(s)
+            _ = infer_ts.to_datetime(s)
 
     def test_ambiguous_raises(self):
         """ValueError on ambiguous formats with raise_on_multiple=True."""
         # 01/02/2024 is ambiguous: could be US (Jan 2) or EU (1 Feb)
         s = pl.Series("ts", ["01/02/2024", "03/04/2024"])
         with pytest.raises(ValueError, match="Multiple timestamp formats"):
-            infer_ts.to_datetime(s)
+            _ = infer_ts.to_datetime(s)
 
     def test_ambiguous_first_match(self):
         """Use first match when raise_on_multiple=False."""
@@ -726,7 +750,7 @@ class TestToDatetimeAPI:
         result = infer_ts.to_datetime(s, format="%Y-%m-%dT%H:%M:%S")
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
+        assert _dt(result, 0).year == 2024
 
     def test_explicit_epoch_format(self):
         """Explicit format= with @unix_* marker."""
@@ -734,8 +758,8 @@ class TestToDatetimeAPI:
         result = infer_ts.to_datetime(s, format="@unix_seconds")
 
         assert result.dtype == pl.Datetime
-        assert result[0].year == 2024
+        assert _dt(result, 0).year == 2024
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    _ = pytest.main([__file__, "-v"])

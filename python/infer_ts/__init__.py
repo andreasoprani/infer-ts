@@ -59,15 +59,13 @@ def to_datetime(
         fmts = infer_format(values, exhaustive=exhaustive)
 
         if not fmts:
-            raise ValueError(
-                "No timestamp format matches the values in the series"
-            )
+            raise ValueError("No timestamp format matches the values in the series")
 
         if len(fmts) > 1 and raise_on_multiple:
             raise ValueError(
                 f"Multiple timestamp formats match the values: {fmts}. "
-                "Pass raise_on_multiple=False to use the first match, "
-                "or pass format= explicitly."
+                + "Pass raise_on_multiple=False to use the first match, "
+                + "or pass format= explicitly."
             )
 
         fmt = fmts[0]

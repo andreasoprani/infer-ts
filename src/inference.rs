@@ -87,7 +87,12 @@ mod tests {
 
     // Format constructor helpers for concise test assertions
     fn std(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
-        Format::Standard(StandardFormat::DateTime { date, sep, time, tz })
+        Format::Standard(StandardFormat::DateTime {
+            date,
+            sep,
+            time,
+            tz,
+        })
     }
     fn date_only(date: DateFmt) -> Format {
         Format::Standard(StandardFormat::DateOnly { date })
@@ -96,7 +101,15 @@ mod tests {
         Format::Unix(UnixFormat { precision })
     }
 
-    use crate::formats::{DateFmt::{self, *}, Separator::{self, *}, TimeFmt::{self, *}, Timezone::{self, *}, UnixPrecision::{self, *}, StandardFormat, UnixFormat};
+    use crate::formats::{
+        DateFmt::{self, *},
+        Separator::{self, *},
+        StandardFormat,
+        TimeFmt::{self, *},
+        Timezone::{self, *},
+        UnixFormat,
+        UnixPrecision::{self, *},
+    };
 
     // ── Happy-path: every format family resolves correctly ─────────────────
 
@@ -408,13 +421,19 @@ mod tests {
     #[test]
     fn early_exit_space_offset() {
         let input = vals(&["2024-01-15 10:30:00+05:30", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![std(Iso, Space, Hms, Some(Offset))]);
+        assert_eq!(
+            infer(&input, false),
+            vec![std(Iso, Space, Hms, Some(Offset))]
+        );
     }
 
     #[test]
     fn early_exit_compact_datetime() {
         let input = vals(&["20240115T103000", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![std(Compact, T, HmsCompact, None)]);
+        assert_eq!(
+            infer(&input, false),
+            vec![std(Compact, T, HmsCompact, None)]
+        );
     }
 
     #[test]
@@ -472,7 +491,10 @@ mod tests {
     #[test]
     fn infer_slash_us_ampm() {
         assert_eq!(
-            infer(&vals(&["01/15/2024 2:30:00 PM", "06/20/2024 8:00:00 AM"]), false),
+            infer(
+                &vals(&["01/15/2024 2:30:00 PM", "06/20/2024 8:00:00 AM"]),
+                false
+            ),
             vec![std(SlashUS, Space, Hms12, None)]
         );
     }
@@ -480,7 +502,10 @@ mod tests {
     #[test]
     fn infer_slash_eu_ampm() {
         assert_eq!(
-            infer(&vals(&["15/01/2024 2:30:00 PM", "20/06/2024 8:00:00 AM"]), false),
+            infer(
+                &vals(&["15/01/2024 2:30:00 PM", "20/06/2024 8:00:00 AM"]),
+                false
+            ),
             vec![std(SlashEU, Space, Hms12, None)]
         );
     }
@@ -488,7 +513,10 @@ mod tests {
     #[test]
     fn infer_iso_ampm() {
         assert_eq!(
-            infer(&vals(&["2024-01-15 2:30:00 PM", "2024-06-20 8:00:00 AM"]), false),
+            infer(
+                &vals(&["2024-01-15 2:30:00 PM", "2024-06-20 8:00:00 AM"]),
+                false
+            ),
             vec![std(Iso, Space, Hms12, None)]
         );
     }
@@ -497,7 +525,10 @@ mod tests {
     fn infer_ampm_resolves_slash_ambiguity() {
         // First value ambiguous (day ≤ 12), second resolves to US.
         assert_eq!(
-            infer(&vals(&["01/02/2024 3:00:00 AM", "03/15/2024 4:00:00 PM"]), false),
+            infer(
+                &vals(&["01/02/2024 3:00:00 AM", "03/15/2024 4:00:00 PM"]),
+                false
+            ),
             vec![std(SlashUS, Space, Hms12, None)]
         );
     }
@@ -514,7 +545,10 @@ mod tests {
     #[test]
     fn infer_slash_us_ampm_compact() {
         assert_eq!(
-            infer(&vals(&["01/15/2024 2:30:00PM", "06/20/2024 8:00:00AM"]), false),
+            infer(
+                &vals(&["01/15/2024 2:30:00PM", "06/20/2024 8:00:00AM"]),
+                false
+            ),
             vec![std(SlashUS, Space, Hms12Compact, None)]
         );
     }
@@ -522,7 +556,10 @@ mod tests {
     #[test]
     fn infer_iso_ampm_compact() {
         assert_eq!(
-            infer(&vals(&["2024-01-15 2:30:00PM", "2024-06-20 8:00:00AM"]), false),
+            infer(
+                &vals(&["2024-01-15 2:30:00PM", "2024-06-20 8:00:00AM"]),
+                false
+            ),
             vec![std(Iso, Space, Hms12Compact, None)]
         );
     }
@@ -530,6 +567,9 @@ mod tests {
     #[test]
     fn early_exit_ampm_compact() {
         let input = vals(&["2024-01-15 2:30:00PM", "GARBAGE"]);
-        assert_eq!(infer(&input, false), vec![std(Iso, Space, Hms12Compact, None)]);
+        assert_eq!(
+            infer(&input, false),
+            vec![std(Iso, Space, Hms12Compact, None)]
+        );
     }
 }
