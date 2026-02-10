@@ -70,6 +70,7 @@ later sections depend on earlier ones being solid.
 
 ## v0.4.1 – Minor changes
 
+- [ ] Fix failing py test (space before tz in RFC)
 - [ ] Deterministic formats order (when returning multiple formats)
 - [ ] Verify that all-nulls series is correctly cast as all-null datetime series
 - [ ] Rename `std` utility function in test

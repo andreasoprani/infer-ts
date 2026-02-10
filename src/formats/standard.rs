@@ -118,8 +118,8 @@ impl StandardFormat {
             StandardFormat::DateTime { date, time } => format!(
                 "{}{}{}{}",
                 date.polars_date(),
-                time.format.polars_time(),
                 time.separator.polars_sep(),
+                time.format.polars_time(),
                 match time.timezone {
                     Some(tz) => tz.polars_tz(),
                     None => "",
