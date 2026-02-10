@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from ._infer_ts import __version__, infer_format, supported_formats
+from ._infer_ts import __version__, infer_format
 
 if TYPE_CHECKING:
     import polars as pl
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 __all__ = [
     "__version__",
     "infer_format",
-    "supported_formats",
     "to_datetime",
 ]
 

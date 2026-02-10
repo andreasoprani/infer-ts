@@ -22,10 +22,6 @@ def infer_format(
     """
     ...
 
-def supported_formats() -> list[str]:
-    """Return all supported Polars-compatible format strings."""
-    ...
-
 def to_datetime(
     series: pl.Series,
     *,

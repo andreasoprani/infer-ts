@@ -158,15 +158,6 @@ if fmt in EPOCH_UNITS:
     )
 ```
 
-### List supported formats
-
-```python
-import infer_ts
-
-for name, polars_fmt in infer_ts.supported_formats():
-    print(f"{name:45} → {polars_fmt}")
-```
-
 ## Handling ambiguity
 
 US and EU slash dates are inherently ambiguous when every day value is ≤ 12.

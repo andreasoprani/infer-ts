@@ -18,12 +18,11 @@ later sections depend on earlier ones being solid.
   - `UnixFormat` struct for epoch timestamps
   - Top-level `Format` enum: `Standard(StandardFormat) | Unix(UnixFormat)`
 - [x] **Programmatic format enumeration** (`src/formats.rs`)
-  - `Format::all()` generates all 104 possible combinations (4 dates × 2 seps × 3 times × 4 tz + 4 date-only + 4 unix)
-  - Validators reject impossible combinations (e.g., slash dates with `T` separator)
+  - ~~`Format::all()` generates all combinations~~ (replaced by `Format::parse()` in v0.4)
   - Removed constraint methods (`valid_separators`, `valid_time_formats`, `valid_timezones`)
   - Removed `name()` methods — only `polars_format()` matters for inference
   - Removed named constants — tests use helper functions instead
-  - Adding a new date family now requires only: add variant, implement `polars_date()` fragment, update validator to check combination validity
+  - Adding a new date family now requires only: add variant, implement `polars_date()` fragment, add `parse_date` branch
 - [x] Verify `%.f` fractional-second handling in Polars
   - `%.f` works correctly with 1–9 fractional digits and mixed precisions in one column
   - 9-digit values truncate to microseconds (Polars' default Datetime resolution) — expected
@@ -47,23 +46,40 @@ later sections depend on earlier ones being solid.
 
 **See**: [REFACTORING_PLAN.md](./REFACTORING_PLAN.md) for detailed step-by-step plan
 
-- [ ] **Replace explicit validation with compositional parsing**
-  - Remove 200+ line `validates()` method with nested match statements
-  - Implement compositional `parse()` that composes date/separator/time/timezone
-  - Accept all structurally valid combinations (remove artificial restrictions)
-- [ ] **Lazy domain initialization for CSP**
-  - Remove `Format::all()` - no more pre-generating ~500 format combinations
-  - Add `Format::parse()` for on-demand format discovery
-  - Hybrid approach: parse first value to construct domain, validate subsequent values
-  - Performance: O(10) instead of O(500) per value after first
-- [ ] **Update documentation**
-  - Document lazy domain initialization approach
-  - Update CSP explanation to reflect new algorithm
-  - Remove outdated comments about pre-enumeration
-- [ ] **Validation & testing**
-  - Ensure Polars compatibility for all format combinations
-  - Verify performance improvements with benchmarks
-  - Preserve all existing test coverage
+- [x] **Replace explicit validation with compositional parsing**
+  - Removed 200+ line `validates()` method with nested match statements
+  - Implemented `StandardFormat::parse()` that composes date/separator/time/timezone linearly
+  - Added `TimeComponent` struct grouping separator + time format + timezone
+  - Added component parsers in `date.rs`: `parse_date`, `parse_separator`, `parse_time`, `parse_frac`, `parse_timezone`
+  - Accepts all structurally valid combinations (removed artificial restrictions)
+  - Removed ~30 monolithic validator functions (~550 lines)
+- [x] **Lazy domain initialization for inference**
+  - Removed `Format::all()` and `OnceLock` — no more pre-generating format combinations
+  - Added `Format::parse()` for on-demand format discovery from a value
+  - Hybrid approach: parse first value to seed candidates, validate subsequent values
+  - Removed `supported_formats()` Python API (no longer meaningful)
+  - Empty/all-null columns now return `[]` (can't infer from no data)
+- [x] **Update documentation**
+  - Updated module-level docs to describe compositional parsing and lazy domain init
+  - Removed outdated comments about pre-enumeration and CSP constraint elimination
+  - Updated Python type stubs, `__init__.py`, and README
+- [x] **Validation & testing**
+  - All 191 Rust tests pass, 69 Python integration tests pass
+  - 0 clippy warnings, formatting clean
+  - 3 former rejection tests updated to acceptance tests (compositional parser correctly accepts more combinations: T separator + AM/PM, AM/PM + timezone, compact date + AM/PM)
+
+## v0.4.1 – Minor changes
+
+- [ ] Deterministic formats order (when returning multiple formats)
+- [ ] Verify that all-nulls series is correctly cast as all-null datetime series
+- [ ] Rename `std` utility function in test
+- [ ] Evaluate if Standard -> polars_format can return str instead of String, or otherwise return String everywhere.
+- [ ] Add parse also to UnixFormat to match StandardFormat
+- [ ] Maybe separate DateFmt and StandardFormat into separate formats (DateFormat and DateTimeFormat)? In this case move Separator, TimeFmt and Timezone into DateTimeFormat and re-use methods of DateFormat in it
+- [ ] Check that parse_iso_date is actually compliant with ISO (eg year digits)
+- [ ] Add failure tests to test edge-cases that shouldn't pass that we may be missing
+- [ ] Remove restriction on Rfc2822 always requiring the time part
+- [ ] StandardFormat.validates shouldn't use parsing but just validating that single format
 
 ---
 

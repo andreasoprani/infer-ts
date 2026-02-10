@@ -1,10 +1,10 @@
-//! **infer-ts** – Infer timestamp formats from string columns using CSP
-//! constraint elimination, exposed to Python via PyO3.
+//! **infer-ts** – Infer timestamp formats from string columns using
+//! compositional parsing, exposed to Python via PyO3.
 //!
-//! Given a column of string values the library progressively eliminates
-//! candidate timestamp formats that are inconsistent with each value.  It
-//! returns as soon as a single format remains (unless `exhaustive=True`), or
-//! after every value has been checked.
+//! Given a column of string values the library parses the first non-null value
+//! to seed candidate formats, then validates subsequent values against those
+//! candidates. It returns as soon as a single format remains (unless
+//! `exhaustive=True`), or after every value has been checked.
 //!
 //! The returned format strings are compatible with Polars
 //! `Expr.str.to_datetime(format=…)`.  Unix-epoch columns return special
@@ -15,10 +15,10 @@ use pyo3::prelude::*;
 mod formats;
 mod inference;
 
-/// Infer timestamp format(s) from a string column using constraint elimination.
+/// Infer timestamp format(s) from a string column using compositional parsing.
 ///
-/// Iterates through *values*, eliminating candidate formats that fail to
-/// validate each entry.
+/// Parses the first non-null value to seed candidate formats, then validates
+/// subsequent values against those candidates.
 ///
 /// Args:
 ///     values: A Python list of `str | None`.  `None` entries are skipped.
@@ -32,8 +32,7 @@ mod inference;
 ///     See the README for how to apply these with Polars.
 ///
 /// Special cases:
-/// - Empty list: no format matches all values
-/// - All formats: column contains only nulls/empty values
+/// - Empty list: no format matches all values, or column is all nulls/empty
 /// - Multiple formats: ambiguous input (e.g., US vs EU date format)
 ///
 /// Example (Python):
@@ -57,34 +56,12 @@ mod inference;
 fn infer_format(values: Vec<Option<String>>, exhaustive: bool) -> Vec<String> {
     let refs: Vec<Option<&str>> = values.iter().map(|s| s.as_deref()).collect();
     let formats = inference::infer(&refs, exhaustive);
-    formats
-        .iter()
-        .map(|f| f.polars_format())
-        .collect()
-}
-
-/// Return all supported Polars-compatible format strings.
-///
-/// Useful for introspection and documentation.
-///
-/// Example (Python):
-/// ```python
-/// import infer_ts
-/// for fmt in infer_ts.supported_formats():
-///     print(fmt)
-/// ```
-#[pyfunction]
-fn supported_formats() -> Vec<String> {
-    formats::Format::all()
-        .iter()
-        .map(|f| f.polars_format())
-        .collect()
+    formats.iter().map(|f| f.polars_format()).collect()
 }
 
 #[pymodule]
 fn _infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(infer_format, m)?)?;
-    m.add_function(wrap_pyfunction!(supported_formats, m)?)?;
     m.add("__version__", "0.1.0")?;
     Ok(())
 }

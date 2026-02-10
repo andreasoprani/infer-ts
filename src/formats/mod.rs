@@ -1,19 +1,14 @@
-//! Timestamp format definitions and per-value validation.
+//! Timestamp format definitions, compositional parsing, and per-value validation.
 //!
-//! Each [`Format`] variant represents an exact timestamp layout. Validation is
-//! strict: a value only passes if its structure matches the format precisely, with
-//! no extra or missing components.  This exactness is what lets the CSP elimination
-//! in [`crate::inference`] work — each format's accepted set is as disjoint as
-//! possible from the others.
+//! Each [`Format`] variant represents an exact timestamp layout. Parsing is
+//! compositional: date → separator → time → timezone are parsed linearly,
+//! accepting all structurally valid combinations.
 //!
 //! # Architecture
 //!
-//! Formats are organized compositionally:
-//!
 //! - **Standard formats** combine a date format, separator, time format, and optional
-//!   timezone. All combinations are generated; the validator rejects impossible ones
-//!   (e.g., slash dates with `T` separator). The CSP inference eliminates these on the
-//!   first value anyway.
+//!   timezone. [`Format::parse`] discovers all matching formats for a value via
+//!   compositional parsing. [`Format::validates`] checks a specific format against a value.
 //!
 //! - **Unix formats** are bare integers distinguished by digit count.
 
@@ -26,8 +21,8 @@ pub use unix::{UnixFormat, UnixPrecision};
 
 #[cfg(test)]
 pub use date::{DateFmt, Separator, TimeFmt, Timezone};
-
-use std::sync::OnceLock;
+#[cfg(test)]
+pub use standard::TimeComponent;
 
 // ─── Top-Level Format Enum ───────────────────────────────────────────────────
 
@@ -42,26 +37,30 @@ pub enum Format {
 }
 
 impl Format {
-    /// Every supported format, generated from component constraints.
+    /// Parse a value and return all matching formats.
     ///
-    /// Lazily initialised once via [`OnceLock`]; subsequent calls return the
-    /// same slice.  Adding a new component variant and wiring its constraints
-    /// in the `DateFmt` / `Separator` / … impls is sufficient to include every
-    /// valid combination automatically.
-    pub fn all() -> &'static [Format] {
-        static FORMATS: OnceLock<Vec<Format>> = OnceLock::new();
-        FORMATS.get_or_init(|| {
-            let mut formats: Vec<Format> = StandardFormat::all_valid()
-                .into_iter()
-                .map(Format::Standard)
-                .collect();
-            for precision in UnixPrecision::all() {
-                formats.push(Format::Unix(UnixFormat {
-                    precision: *precision,
-                }));
+    /// Uses compositional parsing for standard formats (date → separator → time → timezone)
+    /// and digit-count matching for Unix formats.
+    pub fn parse(value: &str) -> Vec<Format> {
+        if value.is_empty() || !value.is_ascii() {
+            return vec![];
+        }
+
+        let mut matches: Vec<Format> = StandardFormat::parse(value)
+            .into_iter()
+            .map(Format::Standard)
+            .collect();
+
+        for precision in UnixPrecision::all() {
+            let uf = UnixFormat {
+                precision: *precision,
+            };
+            if uf.validates(value) {
+                matches.push(Format::Unix(uf));
             }
-            formats
-        })
+        }
+
+        matches
     }
 
     /// Polars-compatible format string for `Expr.str.to_datetime(format=...)`.
@@ -78,7 +77,6 @@ impl Format {
     /// Return `true` when `value` is a structurally valid instance of this format.
     ///
     /// Validation is **exact**: no extra or missing components are tolerated.
-    /// This disjointness is essential for the CSP propagation step.
     ///
     /// **Note:** This method does *not* trim leading/trailing whitespace.  The
     /// inference engine ([`crate::inference::infer`]) trims values before calling
@@ -109,9 +107,11 @@ mod tests {
     fn std(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
         Format::Standard(StandardFormat::DateTime {
             date,
-            sep,
-            time,
-            tz,
+            time: TimeComponent {
+                separator: sep,
+                format: time,
+                timezone: tz,
+            },
         })
     }
     fn date_only(date: DateFmt) -> Format {
@@ -123,39 +123,50 @@ mod tests {
 
     use super::{DateFmt::*, Separator::*, TimeFmt::*, Timezone::*, UnixPrecision::*};
 
-    /// Assert that *only* `expected` validates `value`; every other format rejects it.
+    /// Assert that *only* `expected` validates `value`.
     fn assert_only(value: &str, expected: Format) {
-        for fmt in Format::all() {
-            let ok = fmt.validates(value);
-            if *fmt == expected {
-                assert!(ok, "{:?} should accept {:?}", fmt, value);
-            } else {
-                assert!(
-                    !ok,
-                    "{:?} should reject {:?} (only {:?} expected)",
-                    fmt, value, expected
-                );
-            }
-        }
+        let parsed = Format::parse(value);
+        assert_eq!(
+            parsed,
+            vec![expected],
+            "expected only {:?} for {:?}, got {:?}",
+            expected,
+            value,
+            parsed
+        );
     }
 
     /// Assert that exactly the listed formats validate `value`.
     fn assert_set(value: &str, expected: &[Format]) {
-        for fmt in Format::all() {
-            let ok = fmt.validates(value);
-            if expected.contains(fmt) {
-                assert!(ok, "{:?} should accept {:?}", fmt, value);
-            } else {
-                assert!(!ok, "{:?} should reject {:?}", fmt, value);
-            }
+        let parsed = Format::parse(value);
+        assert_eq!(
+            parsed.len(),
+            expected.len(),
+            "expected {:?} for {:?}, got {:?}",
+            expected,
+            value,
+            parsed
+        );
+        for fmt in expected {
+            assert!(
+                parsed.contains(fmt),
+                "{:?} should be in parse results for {:?}, got {:?}",
+                fmt,
+                value,
+                parsed
+            );
         }
     }
 
     /// Assert that *no* format validates `value`.
     fn assert_none(value: &str) {
-        for fmt in Format::all() {
-            assert!(!fmt.validates(value), "{:?} should reject {:?}", fmt, value);
-        }
+        let parsed = Format::parse(value);
+        assert!(
+            parsed.is_empty(),
+            "expected no formats for {:?}, got {:?}",
+            value,
+            parsed
+        );
     }
 
     // ── ISO 8601 (T separator) ──────────────────────────────────────────────
@@ -576,19 +587,28 @@ mod tests {
     }
 
     #[test]
-    fn ampm_t_sep_rejected() {
-        assert_none("2024-01-15T2:30:00 PM");
+    fn ampm_t_sep_accepted() {
+        // Compositional parser accepts T separator with 12-hour time
+        assert_only("2024-01-15T2:30:00 PM", std(Iso, T, Hms12, None));
     }
 
     #[test]
-    fn ampm_tz_rejected() {
-        assert_none("2024-01-15 2:30:00 PM+05:00");
-        assert_none("01/15/2024 2:30:00 PMZ");
+    fn ampm_tz_accepted() {
+        // Compositional parser accepts 12-hour time with timezone
+        assert_only(
+            "2024-01-15 2:30:00 PM+05:00",
+            std(Iso, Space, Hms12, Some(Offset)),
+        );
+        assert_only(
+            "01/15/2024 2:30:00 PMZ",
+            std(SlashUS, Space, Hms12, Some(Utc)),
+        );
     }
 
     #[test]
-    fn compact_ampm_rejected() {
-        assert_none("20240115 2:30:00 PM");
+    fn compact_date_ampm_accepted() {
+        // Compositional parser accepts compact date with space + 12-hour time
+        assert_only("20240115 2:30:00 PM", std(Compact, Space, Hms12, None));
     }
 
     // ── 12-hour AM/PM without space (compact) ────────────────────────────────
