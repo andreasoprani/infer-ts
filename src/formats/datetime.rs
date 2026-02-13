@@ -1,6 +1,7 @@
-use super::date::*;
+use super::date::{parse_date, DateFmt};
+use super::time::*;
 
-/// Time component of a standard datetime: separator + time format + optional timezone.
+/// Time component of a datetime: separator + time format + optional timezone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TimeComponent {
     pub separator: Separator,
@@ -10,21 +11,19 @@ pub struct TimeComponent {
     pub spaced_tz: bool,
 }
 
-/// A standard datetime format composed of date + optional time component.
+/// A datetime format composed of date + time component.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum StandardFormat {
-    /// Date only (no time component)
-    DateOnly { date: DateFmt },
-    /// Date and time with optional timezone
-    DateTime { date: DateFmt, time: TimeComponent },
+pub struct DateTimeFormat {
+    pub date: DateFmt,
+    pub time: TimeComponent,
 }
 
-impl StandardFormat {
-    /// Parse a value and return all matching `StandardFormat`s.
+impl DateTimeFormat {
+    /// Parse a value and return all matching `DateTimeFormat`s.
     ///
     /// Compositional parsing: parse date → separator → time → timezone linearly,
     /// accepting all structurally valid combinations.
-    pub fn parse(value: &str) -> Vec<StandardFormat> {
+    pub fn parse(value: &str) -> Vec<DateTimeFormat> {
         let mut matches = Vec::new();
 
         for date_fmt in DateFmt::all() {
@@ -33,8 +32,7 @@ impl StandardFormat {
             };
 
             if remaining.is_empty() {
-                matches.push(StandardFormat::DateOnly { date: *date_fmt });
-                continue;
+                continue; // date-only → not our concern
             }
 
             Self::parse_time_components(remaining, *date_fmt, &mut matches);
@@ -48,7 +46,7 @@ impl StandardFormat {
     fn parse_time_components(
         remaining: &str,
         date_fmt: DateFmt,
-        matches: &mut Vec<StandardFormat>,
+        matches: &mut Vec<DateTimeFormat>,
     ) {
         for sep in [Separator::T, Separator::Space] {
             let Some(after_sep) = parse_separator(remaining, sep) else {
@@ -68,7 +66,7 @@ impl StandardFormat {
 
                 // No timezone
                 if after_time.is_empty() {
-                    matches.push(StandardFormat::DateTime {
+                    matches.push(DateTimeFormat {
                         date: date_fmt,
                         time: TimeComponent {
                             separator: sep,
@@ -94,7 +92,7 @@ impl StandardFormat {
 
                         if let Some(after_tz) = parse_timezone(tz_input, tz) {
                             if after_tz.is_empty() {
-                                matches.push(StandardFormat::DateTime {
+                                matches.push(DateTimeFormat {
                                     date: date_fmt,
                                     time: TimeComponent {
                                         separator: sep,
@@ -113,63 +111,47 @@ impl StandardFormat {
 
     /// Polars-compatible format string, built compositionally from components.
     pub fn polars_format(&self) -> String {
-        match self {
-            StandardFormat::DateOnly { date } => date.polars_date().to_string(),
-            StandardFormat::DateTime { date, time } => {
-                let tz_str = match time.timezone {
-                    Some(tz) if time.spaced_tz => {
-                        let mut s = String::from(" ");
-                        s.push_str(tz.polars_tz());
-                        s
-                    }
-                    Some(tz) => tz.polars_tz().to_string(),
-                    None => String::new(),
-                };
-                format!(
-                    "{}{}{}{}",
-                    date.polars_date(),
-                    time.separator.polars_sep(),
-                    time.format.polars_time(),
-                    tz_str,
-                )
+        let tz_str = match self.time.timezone {
+            Some(tz) if self.time.spaced_tz => {
+                let mut s = String::from(" ");
+                s.push_str(tz.polars_tz());
+                s
             }
-        }
+            Some(tz) => tz.polars_tz().to_string(),
+            None => String::new(),
+        };
+        format!(
+            "{}{}{}{}",
+            self.date.polars_date(),
+            self.time.separator.polars_sep(),
+            self.time.format.polars_time(),
+            tz_str,
+        )
     }
 
     /// Validate a value against this specific format using compositional parsing.
-    ///
-    /// Unlike `parse()` which discovers all matching formats, this method checks
-    /// only the specific components of `self`, making it more efficient for
-    /// subsequent-value validation in the inference engine.
     pub(super) fn validates(&self, value: &str) -> bool {
-        match self {
-            StandardFormat::DateOnly { date } => {
-                parse_date(value, *date).is_some_and(|r| r.is_empty())
-            }
-            StandardFormat::DateTime { date, time } => {
-                let Some(after_date) = parse_date(value, *date) else {
-                    return false;
-                };
-                let Some(after_sep) = parse_separator(after_date, time.separator) else {
-                    return false;
-                };
-                let Some(after_time) = parse_time(after_sep, time.format) else {
-                    return false;
-                };
-                match time.timezone {
-                    None => after_time.is_empty(),
-                    Some(tz) => {
-                        let tz_input = if time.spaced_tz {
-                            if after_time.is_empty() || after_time.as_bytes()[0] != b' ' {
-                                return false;
-                            }
-                            &after_time[1..]
-                        } else {
-                            after_time
-                        };
-                        parse_timezone(tz_input, tz).is_some_and(|r| r.is_empty())
+        let Some(after_date) = parse_date(value, self.date) else {
+            return false;
+        };
+        let Some(after_sep) = parse_separator(after_date, self.time.separator) else {
+            return false;
+        };
+        let Some(after_time) = parse_time(after_sep, self.time.format) else {
+            return false;
+        };
+        match self.time.timezone {
+            None => after_time.is_empty(),
+            Some(tz) => {
+                let tz_input = if self.time.spaced_tz {
+                    if after_time.is_empty() || after_time.as_bytes()[0] != b' ' {
+                        return false;
                     }
-                }
+                    &after_time[1..]
+                } else {
+                    after_time
+                };
+                parse_timezone(tz_input, tz).is_some_and(|r| r.is_empty())
             }
         }
     }

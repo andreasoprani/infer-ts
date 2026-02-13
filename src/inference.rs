@@ -92,7 +92,7 @@ mod tests {
 
     // Format constructor helpers for concise test assertions
     fn dt(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
-        Format::Standard(StandardFormat::DateTime {
+        Format::DateTime(DateTimeFormat {
             date,
             time: crate::formats::TimeComponent {
                 separator: sep,
@@ -103,7 +103,7 @@ mod tests {
         })
     }
     fn dt_spaced_tz(date: DateFmt, sep: Separator, time: TimeFmt, tz: Timezone) -> Format {
-        Format::Standard(StandardFormat::DateTime {
+        Format::DateTime(DateTimeFormat {
             date,
             time: crate::formats::TimeComponent {
                 separator: sep,
@@ -114,7 +114,7 @@ mod tests {
         })
     }
     fn date_only(date: DateFmt) -> Format {
-        Format::Standard(StandardFormat::DateOnly { date })
+        Format::Date(DateFormat { date })
     }
     fn unix(precision: UnixPrecision) -> Format {
         Format::Unix(UnixFormat { precision })
@@ -122,8 +122,8 @@ mod tests {
 
     use crate::formats::{
         DateFmt::{self, *},
+        DateFormat, DateTimeFormat,
         Separator::{self, *},
-        StandardFormat,
         TimeFmt::{self, *},
         Timezone::{self, *},
         UnixFormat,

@@ -6,23 +6,28 @@
 //!
 //! # Architecture
 //!
-//! - **Standard formats** combine a date format, separator, time format, and optional
-//!   timezone. [`Format::parse`] discovers all matching formats for a value via
+//! - **Date formats** ([`DateFormat`]) represent date-only layouts.
+//! - **DateTime formats** ([`DateTimeFormat`]) combine a date format, separator,
+//!   time format, and optional timezone.
+//! - [`Format::parse`] discovers all matching formats for a value via
 //!   compositional parsing. [`Format::validates`] checks a specific format against a value.
-//!
 //! - **Unix formats** are bare integers distinguished by digit count.
 
 mod date;
-mod standard;
+mod datetime;
+mod time;
 mod unix;
 
-pub use standard::StandardFormat;
+pub use date::DateFormat;
+pub use datetime::DateTimeFormat;
 pub use unix::UnixFormat;
 
 #[cfg(test)]
-pub use date::{DateFmt, Separator, TimeFmt, Timezone};
+pub use date::DateFmt;
 #[cfg(test)]
-pub use standard::TimeComponent;
+pub use datetime::TimeComponent;
+#[cfg(test)]
+pub use time::{Separator, TimeFmt, Timezone};
 #[cfg(test)]
 pub use unix::UnixPrecision;
 
@@ -30,11 +35,12 @@ pub use unix::UnixPrecision;
 
 /// Every timestamp layout the inference engine can detect.
 ///
-/// This is the top-level enum that encompasses both standard datetime formats
-/// and Unix epoch timestamps.
+/// This is the top-level enum that encompasses date-only formats, datetime
+/// formats, and Unix epoch timestamps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Format {
-    Standard(StandardFormat),
+    Date(DateFormat),
+    DateTime(DateTimeFormat),
     Unix(UnixFormat),
 }
 
@@ -48,10 +54,16 @@ impl Format {
             return vec![];
         }
 
-        let mut matches: Vec<Format> = StandardFormat::parse(value)
+        let mut matches: Vec<Format> = DateFormat::parse(value)
             .into_iter()
-            .map(Format::Standard)
+            .map(Format::Date)
             .collect();
+
+        matches.extend(
+            DateTimeFormat::parse(value)
+                .into_iter()
+                .map(Format::DateTime),
+        );
 
         matches.extend(UnixFormat::parse(value).into_iter().map(Format::Unix));
 
@@ -64,7 +76,8 @@ impl Format {
     /// handles them via integer casting, not format-string parsing.
     pub fn polars_format(&self) -> String {
         match self {
-            Format::Standard(sf) => sf.polars_format(),
+            Format::Date(df) => df.polars_format(),
+            Format::DateTime(dtf) => dtf.polars_format(),
             Format::Unix(unix) => unix.polars_format(),
         }
     }
@@ -82,7 +95,8 @@ impl Format {
         }
 
         match self {
-            Format::Standard(sf) => sf.validates(value),
+            Format::Date(df) => df.validates(value),
+            Format::DateTime(dtf) => dtf.validates(value),
             Format::Unix(unix) => unix.validates(value),
         }
     }
@@ -94,13 +108,15 @@ impl Format {
 mod tests {
     use super::*;
 
-    use date::{DateFmt, Separator, TimeFmt, Timezone};
+    use date::DateFmt;
+    use datetime::TimeComponent;
+    use time::{Separator, TimeFmt, Timezone};
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     // Format constructor helpers for concise test assertions
     fn dt(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
-        Format::Standard(StandardFormat::DateTime {
+        Format::DateTime(DateTimeFormat {
             date,
             time: TimeComponent {
                 separator: sep,
@@ -111,7 +127,7 @@ mod tests {
         })
     }
     fn dt_spaced_tz(date: DateFmt, sep: Separator, time: TimeFmt, tz: Timezone) -> Format {
-        Format::Standard(StandardFormat::DateTime {
+        Format::DateTime(DateTimeFormat {
             date,
             time: TimeComponent {
                 separator: sep,
@@ -122,7 +138,7 @@ mod tests {
         })
     }
     fn date_only(date: DateFmt) -> Format {
-        Format::Standard(StandardFormat::DateOnly { date })
+        Format::Date(DateFormat { date })
     }
     fn unix(precision: UnixPrecision) -> Format {
         Format::Unix(UnixFormat { precision })
