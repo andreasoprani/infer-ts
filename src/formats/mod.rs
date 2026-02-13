@@ -17,12 +17,14 @@ mod standard;
 mod unix;
 
 pub use standard::StandardFormat;
-pub use unix::{UnixFormat, UnixPrecision};
+pub use unix::UnixFormat;
 
 #[cfg(test)]
 pub use date::{DateFmt, Separator, TimeFmt, Timezone};
 #[cfg(test)]
 pub use standard::TimeComponent;
+#[cfg(test)]
+pub use unix::UnixPrecision;
 
 // ─── Top-Level Format Enum ───────────────────────────────────────────────────
 
@@ -30,7 +32,7 @@ pub use standard::TimeComponent;
 ///
 /// This is the top-level enum that encompasses both standard datetime formats
 /// and Unix epoch timestamps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Format {
     Standard(StandardFormat),
     Unix(UnixFormat),
@@ -51,14 +53,7 @@ impl Format {
             .map(Format::Standard)
             .collect();
 
-        for precision in UnixPrecision::all() {
-            let uf = UnixFormat {
-                precision: *precision,
-            };
-            if uf.validates(value) {
-                matches.push(Format::Unix(uf));
-            }
-        }
+        matches.extend(UnixFormat::parse(value).into_iter().map(Format::Unix));
 
         matches
     }
@@ -69,8 +64,8 @@ impl Format {
     /// handles them via integer casting, not format-string parsing.
     pub fn polars_format(&self) -> String {
         match self {
-            Format::Standard(std) => std.polars_format(),
-            Format::Unix(unix) => unix.polars_format().to_string(),
+            Format::Standard(sf) => sf.polars_format(),
+            Format::Unix(unix) => unix.polars_format(),
         }
     }
 
@@ -87,7 +82,7 @@ impl Format {
         }
 
         match self {
-            Format::Standard(std) => std.validates(value),
+            Format::Standard(sf) => sf.validates(value),
             Format::Unix(unix) => unix.validates(value),
         }
     }
@@ -104,13 +99,25 @@ mod tests {
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     // Format constructor helpers for concise test assertions
-    fn std(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
+    fn dt(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
         Format::Standard(StandardFormat::DateTime {
             date,
             time: TimeComponent {
                 separator: sep,
                 format: time,
                 timezone: tz,
+                spaced_tz: false,
+            },
+        })
+    }
+    fn dt_spaced_tz(date: DateFmt, sep: Separator, time: TimeFmt, tz: Timezone) -> Format {
+        Format::Standard(StandardFormat::DateTime {
+            date,
+            time: TimeComponent {
+                separator: sep,
+                format: time,
+                timezone: Some(tz),
+                spaced_tz: true,
             },
         })
     }
@@ -173,50 +180,50 @@ mod tests {
 
     #[test]
     fn iso8601_plain() {
-        assert_only("2024-01-15T10:30:00", std(Iso, T, Hms, None));
+        assert_only("2024-01-15T10:30:00", dt(Iso, T, Hms, None));
     }
 
     #[test]
     fn iso8601_utc() {
-        assert_only("2024-01-15T10:30:00Z", std(Iso, T, Hms, Some(Utc)));
+        assert_only("2024-01-15T10:30:00Z", dt(Iso, T, Hms, Some(Utc)));
     }
 
     #[test]
     fn iso8601_offset_with_colon() {
-        assert_only("2024-01-15T10:30:00+05:30", std(Iso, T, Hms, Some(Offset)));
+        assert_only("2024-01-15T10:30:00+05:30", dt(Iso, T, Hms, Some(Offset)));
     }
 
     #[test]
     fn iso8601_offset_without_colon() {
         assert_only(
             "2024-01-15T10:30:00+0530",
-            std(Iso, T, Hms, Some(OffsetCompact)),
+            dt(Iso, T, Hms, Some(OffsetCompact)),
         );
     }
 
     #[test]
     fn iso8601_negative_offset() {
-        assert_only("2024-01-15T10:30:00-08:00", std(Iso, T, Hms, Some(Offset)));
+        assert_only("2024-01-15T10:30:00-08:00", dt(Iso, T, Hms, Some(Offset)));
     }
 
     #[test]
     fn iso8601_negative_offset_compact() {
         assert_only(
             "2024-01-15T10:30:00-0800",
-            std(Iso, T, Hms, Some(OffsetCompact)),
+            dt(Iso, T, Hms, Some(OffsetCompact)),
         );
     }
 
     #[test]
     fn iso8601_frac() {
-        assert_only("2024-01-15T10:30:00.123456", std(Iso, T, HmsFrac, None));
+        assert_only("2024-01-15T10:30:00.123456", dt(Iso, T, HmsFrac, None));
     }
 
     #[test]
     fn iso8601_frac_utc() {
         assert_only(
             "2024-01-15T10:30:00.123456Z",
-            std(Iso, T, HmsFrac, Some(Utc)),
+            dt(Iso, T, HmsFrac, Some(Utc)),
         );
     }
 
@@ -224,7 +231,7 @@ mod tests {
     fn iso8601_frac_offset() {
         assert_only(
             "2024-01-15T10:30:00.123456+05:30",
-            std(Iso, T, HmsFrac, Some(Offset)),
+            dt(Iso, T, HmsFrac, Some(Offset)),
         );
     }
 
@@ -232,28 +239,28 @@ mod tests {
     fn iso8601_frac_offset_compact() {
         assert_only(
             "2024-01-15T10:30:00.123456+0530",
-            std(Iso, T, HmsFrac, Some(OffsetCompact)),
+            dt(Iso, T, HmsFrac, Some(OffsetCompact)),
         );
     }
 
     #[test]
     fn iso8601_lowercase_t() {
-        assert_only("2024-01-15t10:30:00", std(Iso, T, Hms, None));
+        assert_only("2024-01-15t10:30:00", dt(Iso, T, Hms, None));
     }
 
     #[test]
     fn iso8601_lowercase_z() {
-        assert_only("2024-01-15T10:30:00z", std(Iso, T, Hms, Some(Utc)));
+        assert_only("2024-01-15T10:30:00z", dt(Iso, T, Hms, Some(Utc)));
     }
 
     #[test]
     fn iso8601_frac_1_digit() {
-        assert_only("2024-01-15T10:30:00.1", std(Iso, T, HmsFrac, None));
+        assert_only("2024-01-15T10:30:00.1", dt(Iso, T, HmsFrac, None));
     }
 
     #[test]
     fn iso8601_frac_9_digits() {
-        assert_only("2024-01-15T10:30:00.123456789", std(Iso, T, HmsFrac, None));
+        assert_only("2024-01-15T10:30:00.123456789", dt(Iso, T, HmsFrac, None));
     }
 
     #[test]
@@ -270,24 +277,24 @@ mod tests {
 
     #[test]
     fn space_plain() {
-        assert_only("2024-01-15 10:30:00", std(Iso, Space, Hms, None));
+        assert_only("2024-01-15 10:30:00", dt(Iso, Space, Hms, None));
     }
 
     #[test]
     fn space_frac() {
-        assert_only("2024-01-15 10:30:00.999", std(Iso, Space, HmsFrac, None));
+        assert_only("2024-01-15 10:30:00.999", dt(Iso, Space, HmsFrac, None));
     }
 
     #[test]
     fn space_utc() {
-        assert_only("2024-01-15 10:30:00Z", std(Iso, Space, Hms, Some(Utc)));
+        assert_only("2024-01-15 10:30:00Z", dt(Iso, Space, Hms, Some(Utc)));
     }
 
     #[test]
     fn space_offset() {
         assert_only(
             "2024-01-15 10:30:00+05:30",
-            std(Iso, Space, Hms, Some(Offset)),
+            dt(Iso, Space, Hms, Some(Offset)),
         );
     }
 
@@ -295,7 +302,7 @@ mod tests {
     fn space_offset_compact() {
         assert_only(
             "2024-01-15 10:30:00+0530",
-            std(Iso, Space, Hms, Some(OffsetCompact)),
+            dt(Iso, Space, Hms, Some(OffsetCompact)),
         );
     }
 
@@ -303,7 +310,7 @@ mod tests {
     fn space_frac_utc() {
         assert_only(
             "2024-01-15 10:30:00.123Z",
-            std(Iso, Space, HmsFrac, Some(Utc)),
+            dt(Iso, Space, HmsFrac, Some(Utc)),
         );
     }
 
@@ -311,7 +318,7 @@ mod tests {
     fn space_frac_offset() {
         assert_only(
             "2024-01-15 10:30:00.123+05:30",
-            std(Iso, Space, HmsFrac, Some(Offset)),
+            dt(Iso, Space, HmsFrac, Some(Offset)),
         );
     }
 
@@ -319,7 +326,7 @@ mod tests {
     fn space_frac_offset_compact() {
         assert_only(
             "2024-01-15 10:30:00.123+0530",
-            std(Iso, Space, HmsFrac, Some(OffsetCompact)),
+            dt(Iso, Space, HmsFrac, Some(OffsetCompact)),
         );
     }
 
@@ -327,7 +334,7 @@ mod tests {
     fn space_negative_offset() {
         assert_only(
             "2024-01-15 10:30:00-08:00",
-            std(Iso, Space, Hms, Some(Offset)),
+            dt(Iso, Space, Hms, Some(Offset)),
         );
     }
 
@@ -379,22 +386,19 @@ mod tests {
 
     #[test]
     fn slash_us_datetime() {
-        assert_only("01/15/2024 10:30:00", std(SlashUS, Space, Hms, None));
+        assert_only("01/15/2024 10:30:00", dt(SlashUS, Space, Hms, None));
     }
 
     #[test]
     fn slash_eu_datetime() {
-        assert_only("15/01/2024 10:30:00", std(SlashEU, Space, Hms, None));
+        assert_only("15/01/2024 10:30:00", dt(SlashEU, Space, Hms, None));
     }
 
     #[test]
     fn slash_datetime_ambiguous() {
         assert_set(
             "01/02/2024 10:30:00",
-            &[
-                std(SlashUS, Space, Hms, None),
-                std(SlashEU, Space, Hms, None),
-            ],
+            &[dt(SlashUS, Space, Hms, None), dt(SlashEU, Space, Hms, None)],
         );
     }
 
@@ -423,7 +427,7 @@ mod tests {
 
     #[test]
     fn compact_datetime() {
-        assert_only("20240115T103000", std(Compact, T, HmsCompact, None));
+        assert_only("20240115T103000", dt(Compact, T, HmsCompact, None));
     }
 
     #[test]
@@ -522,17 +526,17 @@ mod tests {
 
     #[test]
     fn slash_us_ampm_unpadded() {
-        assert_only("01/15/2024 2:30:00 PM", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 2:30:00 PM", dt(SlashUS, Space, Hms12, None));
     }
 
     #[test]
     fn slash_us_ampm_padded() {
-        assert_only("01/15/2024 02:30:00 PM", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 02:30:00 PM", dt(SlashUS, Space, Hms12, None));
     }
 
     #[test]
     fn slash_eu_ampm() {
-        assert_only("15/01/2024 2:30:00 PM", std(SlashEU, Space, Hms12, None));
+        assert_only("15/01/2024 2:30:00 PM", dt(SlashEU, Space, Hms12, None));
     }
 
     #[test]
@@ -540,40 +544,40 @@ mod tests {
         assert_set(
             "01/02/2024 3:00:00 AM",
             &[
-                std(SlashUS, Space, Hms12, None),
-                std(SlashEU, Space, Hms12, None),
+                dt(SlashUS, Space, Hms12, None),
+                dt(SlashEU, Space, Hms12, None),
             ],
         );
     }
 
     #[test]
     fn iso_ampm() {
-        assert_only("2024-01-15 2:30:00 PM", std(Iso, Space, Hms12, None));
+        assert_only("2024-01-15 2:30:00 PM", dt(Iso, Space, Hms12, None));
     }
 
     #[test]
     fn iso_ampm_padded() {
-        assert_only("2024-01-15 02:30:00 PM", std(Iso, Space, Hms12, None));
+        assert_only("2024-01-15 02:30:00 PM", dt(Iso, Space, Hms12, None));
     }
 
     #[test]
     fn ampm_lowercase() {
-        assert_only("01/15/2024 2:30:00 pm", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 2:30:00 pm", dt(SlashUS, Space, Hms12, None));
     }
 
     #[test]
     fn ampm_mixed_case() {
-        assert_only("01/15/2024 2:30:00 Am", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 2:30:00 Am", dt(SlashUS, Space, Hms12, None));
     }
 
     #[test]
     fn ampm_hour_12() {
-        assert_only("01/15/2024 12:00:00 PM", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 12:00:00 PM", dt(SlashUS, Space, Hms12, None));
     }
 
     #[test]
     fn ampm_hour_12_am() {
-        assert_only("01/15/2024 12:00:00 AM", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 12:00:00 AM", dt(SlashUS, Space, Hms12, None));
     }
 
     #[test]
@@ -589,7 +593,7 @@ mod tests {
     #[test]
     fn ampm_t_sep_accepted() {
         // Compositional parser accepts T separator with 12-hour time
-        assert_only("2024-01-15T2:30:00 PM", std(Iso, T, Hms12, None));
+        assert_only("2024-01-15T2:30:00 PM", dt(Iso, T, Hms12, None));
     }
 
     #[test]
@@ -597,18 +601,18 @@ mod tests {
         // Compositional parser accepts 12-hour time with timezone
         assert_only(
             "2024-01-15 2:30:00 PM+05:00",
-            std(Iso, Space, Hms12, Some(Offset)),
+            dt(Iso, Space, Hms12, Some(Offset)),
         );
         assert_only(
             "01/15/2024 2:30:00 PMZ",
-            std(SlashUS, Space, Hms12, Some(Utc)),
+            dt(SlashUS, Space, Hms12, Some(Utc)),
         );
     }
 
     #[test]
     fn compact_date_ampm_accepted() {
         // Compositional parser accepts compact date with space + 12-hour time
-        assert_only("20240115 2:30:00 PM", std(Compact, Space, Hms12, None));
+        assert_only("20240115 2:30:00 PM", dt(Compact, Space, Hms12, None));
     }
 
     // ── 12-hour AM/PM without space (compact) ────────────────────────────────
@@ -617,7 +621,7 @@ mod tests {
     fn slash_us_ampm_compact_unpadded() {
         assert_only(
             "01/15/2024 2:30:00PM",
-            std(SlashUS, Space, Hms12Compact, None),
+            dt(SlashUS, Space, Hms12Compact, None),
         );
     }
 
@@ -625,7 +629,7 @@ mod tests {
     fn slash_us_ampm_compact_padded() {
         assert_only(
             "01/15/2024 02:30:00PM",
-            std(SlashUS, Space, Hms12Compact, None),
+            dt(SlashUS, Space, Hms12Compact, None),
         );
     }
 
@@ -633,25 +637,25 @@ mod tests {
     fn slash_eu_ampm_compact() {
         assert_only(
             "15/01/2024 2:30:00PM",
-            std(SlashEU, Space, Hms12Compact, None),
+            dt(SlashEU, Space, Hms12Compact, None),
         );
     }
 
     #[test]
     fn iso_ampm_compact() {
-        assert_only("2024-01-15 2:30:00PM", std(Iso, Space, Hms12Compact, None));
+        assert_only("2024-01-15 2:30:00PM", dt(Iso, Space, Hms12Compact, None));
     }
 
     #[test]
     fn iso_ampm_compact_padded() {
-        assert_only("2024-01-15 02:30:00PM", std(Iso, Space, Hms12Compact, None));
+        assert_only("2024-01-15 02:30:00PM", dt(Iso, Space, Hms12Compact, None));
     }
 
     #[test]
     fn ampm_compact_lowercase() {
         assert_only(
             "01/15/2024 2:30:00pm",
-            std(SlashUS, Space, Hms12Compact, None),
+            dt(SlashUS, Space, Hms12Compact, None),
         );
     }
 
@@ -659,7 +663,7 @@ mod tests {
     fn ampm_compact_hour_12() {
         assert_only(
             "01/15/2024 12:00:00PM",
-            std(SlashUS, Space, Hms12Compact, None),
+            dt(SlashUS, Space, Hms12Compact, None),
         );
     }
 
@@ -698,29 +702,29 @@ mod tests {
 
     #[test]
     fn slash_short_us_datetime() {
-        assert_only("01/15/24 10:30:00", std(SlashUSShort, Space, Hms, None));
+        assert_only("01/15/24 10:30:00", dt(SlashUSShort, Space, Hms, None));
     }
 
     #[test]
     fn slash_short_eu_datetime() {
-        assert_only("15/01/24 10:30:00", std(SlashEUShort, Space, Hms, None));
+        assert_only("15/01/24 10:30:00", dt(SlashEUShort, Space, Hms, None));
     }
 
     #[test]
     fn slash_short_us_ampm_spaced() {
-        assert_only("01/15/24 2:30:00 PM", std(SlashUSShort, Space, Hms12, None));
+        assert_only("01/15/24 2:30:00 PM", dt(SlashUSShort, Space, Hms12, None));
     }
 
     #[test]
     fn slash_short_eu_ampm_spaced() {
-        assert_only("15/01/24 2:30:00 PM", std(SlashEUShort, Space, Hms12, None));
+        assert_only("15/01/24 2:30:00 PM", dt(SlashEUShort, Space, Hms12, None));
     }
 
     #[test]
     fn slash_short_us_ampm_compact() {
         assert_only(
             "01/15/24 2:30:00PM",
-            std(SlashUSShort, Space, Hms12Compact, None),
+            dt(SlashUSShort, Space, Hms12Compact, None),
         );
     }
 
@@ -728,7 +732,7 @@ mod tests {
     fn slash_short_eu_ampm_compact() {
         assert_only(
             "15/01/24 2:30:00PM",
-            std(SlashEUShort, Space, Hms12Compact, None),
+            dt(SlashEUShort, Space, Hms12Compact, None),
         );
     }
 
@@ -771,30 +775,27 @@ mod tests {
 
     #[test]
     fn dot_eu_datetime() {
-        assert_only("15.01.2024 10:30:00", std(DotEU, Space, Hms, None));
+        assert_only("15.01.2024 10:30:00", dt(DotEU, Space, Hms, None));
     }
 
     #[test]
     fn dot_eu_short_datetime() {
-        assert_only("15.01.24 10:30:00", std(DotEUShort, Space, Hms, None));
+        assert_only("15.01.24 10:30:00", dt(DotEUShort, Space, Hms, None));
     }
 
     #[test]
     fn dot_eu_ampm() {
-        assert_only("15.01.2024 2:30:00 PM", std(DotEU, Space, Hms12, None));
+        assert_only("15.01.2024 2:30:00 PM", dt(DotEU, Space, Hms12, None));
     }
 
     #[test]
     fn dot_eu_short_ampm() {
-        assert_only("15.01.24 2:30:00 PM", std(DotEUShort, Space, Hms12, None));
+        assert_only("15.01.24 2:30:00 PM", dt(DotEUShort, Space, Hms12, None));
     }
 
     #[test]
     fn dot_eu_ampm_compact() {
-        assert_only(
-            "15.01.2024 2:30:00PM",
-            std(DotEU, Space, Hms12Compact, None),
-        );
+        assert_only("15.01.2024 2:30:00PM", dt(DotEU, Space, Hms12Compact, None));
     }
 
     #[test]
@@ -848,39 +849,39 @@ mod tests {
 
     #[test]
     fn month_us_datetime() {
-        assert_only("Jan 15, 2024 10:30:00", std(MonthUS, Space, Hms, None));
+        assert_only("Jan 15, 2024 10:30:00", dt(MonthUS, Space, Hms, None));
     }
 
     #[test]
     fn month_eu_datetime() {
-        assert_only("15 Jan 2024 10:30:00", std(MonthEU, Space, Hms, None));
+        assert_only("15 Jan 2024 10:30:00", dt(MonthEU, Space, Hms, None));
     }
 
     #[test]
     fn month_us_short_year_datetime() {
-        assert_only("Jan 15, 24 10:30:00", std(MonthUSShort, Space, Hms, None));
+        assert_only("Jan 15, 24 10:30:00", dt(MonthUSShort, Space, Hms, None));
     }
 
     #[test]
     fn month_eu_short_year_datetime() {
-        assert_only("15 Jan 24 10:30:00", std(MonthEUShort, Space, Hms, None));
+        assert_only("15 Jan 24 10:30:00", dt(MonthEUShort, Space, Hms, None));
     }
 
     #[test]
     fn month_us_ampm() {
-        assert_only("Jan 15, 2024 2:30:00 PM", std(MonthUS, Space, Hms12, None));
+        assert_only("Jan 15, 2024 2:30:00 PM", dt(MonthUS, Space, Hms12, None));
     }
 
     #[test]
     fn month_eu_ampm() {
-        assert_only("15 Jan 2024 2:30:00 PM", std(MonthEU, Space, Hms12, None));
+        assert_only("15 Jan 2024 2:30:00 PM", dt(MonthEU, Space, Hms12, None));
     }
 
     #[test]
     fn month_us_ampm_compact() {
         assert_only(
             "Jan 15, 2024 2:30:00PM",
-            std(MonthUS, Space, Hms12Compact, None),
+            dt(MonthUS, Space, Hms12Compact, None),
         );
     }
 
@@ -888,7 +889,7 @@ mod tests {
     fn month_eu_ampm_compact() {
         assert_only(
             "15 Jan 2024 2:30:00PM",
-            std(MonthEU, Space, Hms12Compact, None),
+            dt(MonthEU, Space, Hms12Compact, None),
         );
     }
 
@@ -950,25 +951,27 @@ mod tests {
     fn month_us_short_ampm() {
         assert_only(
             "Jan 15, 24 2:30:00 PM",
-            std(MonthUSShort, Space, Hms12, None),
+            dt(MonthUSShort, Space, Hms12, None),
         );
     }
 
     #[test]
     fn month_eu_short_ampm() {
-        assert_only(
-            "15 Jan 24 2:30:00 PM",
-            std(MonthEUShort, Space, Hms12, None),
-        );
+        assert_only("15 Jan 24 2:30:00 PM", dt(MonthEUShort, Space, Hms12, None));
     }
 
     // ── RFC 2822 ──────────────────────────────────────────────────────────
 
     #[test]
+    fn rfc2822_date_only() {
+        assert_only("Mon, 15 Jan 2024", date_only(Rfc2822));
+    }
+
+    #[test]
     fn rfc2822_compact_offset() {
         assert_only(
             "Mon, 15 Jan 2024 10:30:00 +0530",
-            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+            dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact),
         );
     }
 
@@ -976,7 +979,7 @@ mod tests {
     fn rfc2822_colon_offset() {
         assert_only(
             "Mon, 15 Jan 2024 10:30:00 +05:30",
-            std(Rfc2822, Space, Hms, Some(Offset)),
+            dt_spaced_tz(Rfc2822, Space, Hms, Offset),
         );
     }
 
@@ -984,7 +987,7 @@ mod tests {
     fn rfc2822_negative_offset() {
         assert_only(
             "Mon, 15 Jan 2024 10:30:00 -0800",
-            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+            dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact),
         );
     }
 
@@ -993,7 +996,7 @@ mod tests {
         // Jan 1, 2024 is a Monday
         assert_only(
             "Mon, 1 Jan 2024 10:30:00 +0000",
-            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+            dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact),
         );
     }
 
@@ -1001,7 +1004,7 @@ mod tests {
     fn rfc2822_case_insensitive_dow_lower() {
         assert_only(
             "mon, 15 Jan 2024 10:30:00 +0530",
-            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+            dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact),
         );
     }
 
@@ -1009,7 +1012,7 @@ mod tests {
     fn rfc2822_case_insensitive_dow_upper() {
         assert_only(
             "MON, 15 JAN 2024 10:30:00 +0530",
-            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+            dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact),
         );
     }
 
@@ -1031,17 +1034,113 @@ mod tests {
         // Rfc2822: "Mon, 15 Jan 2024 10:30:00 +0530" is Rfc2822
         assert_only(
             "Mon, 15 Jan 2024 10:30:00 +0530",
-            std(Rfc2822, Space, Hms, Some(OffsetCompact)),
+            dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact),
         );
     }
 
     #[test]
     fn ampm_spaced_vs_compact_disjoint() {
         // " PM" (spaced) and "PM" (compact) never overlap
-        assert_only("01/15/2024 2:30:00 PM", std(SlashUS, Space, Hms12, None));
+        assert_only("01/15/2024 2:30:00 PM", dt(SlashUS, Space, Hms12, None));
         assert_only(
             "01/15/2024 2:30:00PM",
-            std(SlashUS, Space, Hms12Compact, None),
+            dt(SlashUS, Space, Hms12Compact, None),
         );
+    }
+
+    // ── Failure edge cases ──────────────────────────────────────────────────
+
+    #[test]
+    fn trailing_garbage_rejected() {
+        assert_none("2024-01-15T10:30:00 extra");
+        assert_none("2024-01-15 extra");
+        assert_none("01/15/2024 extra");
+    }
+
+    #[test]
+    fn partial_timezone_rejected() {
+        assert_none("2024-01-15T10:30:00+0");
+        assert_none("2024-01-15T10:30:00+05");
+        assert_none("2024-01-15T10:30:00+5:30");
+    }
+
+    #[test]
+    fn invalid_timezone_values_rejected() {
+        assert_none("2024-01-15T10:30:00+24:00");
+        assert_none("2024-01-15T10:30:00+05:60");
+    }
+
+    #[test]
+    fn month_zero_rejected() {
+        assert_none("2024-00-15");
+    }
+
+    #[test]
+    fn day_zero_rejected() {
+        assert_none("2024-01-00");
+    }
+
+    #[test]
+    fn feb_30_rejected() {
+        assert_none("2024-02-30");
+    }
+
+    #[test]
+    fn feb_31_rejected() {
+        assert_none("2024-02-31");
+    }
+
+    #[test]
+    fn slash_month_zero_rejected() {
+        assert_none("00/15/2024");
+    }
+
+    #[test]
+    fn slash_day_zero_rejected() {
+        // US: month=01, day=00 → invalid; EU: day=01, month=00 → invalid
+        assert_none("01/00/2024");
+    }
+
+    #[test]
+    fn double_timezone_rejected() {
+        assert_none("2024-01-15T10:30:00Z+05:30");
+    }
+
+    #[test]
+    fn compact_datetime_invalid_minute_rejected() {
+        assert_none("20240115T106000");
+    }
+
+    #[test]
+    fn compact_datetime_invalid_second_rejected() {
+        assert_none("20240115T103060");
+    }
+
+    #[test]
+    fn dot_month_zero_rejected() {
+        assert_none("15.00.2024");
+    }
+
+    #[test]
+    fn dot_day_zero_rejected() {
+        assert_none("00.01.2024");
+    }
+
+    #[test]
+    fn iso_non_numeric_parts_rejected() {
+        assert_none("20ab-01-15");
+        assert_none("2024-ab-15");
+        assert_none("2024-01-ab");
+    }
+
+    #[test]
+    fn unix_too_few_digits_rejected() {
+        // 8 digits is too few for unix (and might be a valid compact date)
+        assert_none("12345678");
+    }
+
+    #[test]
+    fn unix_20_digits_rejected() {
+        assert_none("12345678901234567890");
     }
 }

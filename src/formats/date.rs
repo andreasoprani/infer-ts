@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 // ─── Component Enums ─────────────────────────────────────────────────────────
 
 /// Date format within a standard timestamp.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DateFmt {
     /// `YYYY-MM-DD` (ISO 8601)
     Iso,
@@ -34,7 +34,7 @@ pub enum DateFmt {
 }
 
 /// Separator between date and time components.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Separator {
     /// `T` or `t` (ISO 8601)
     T,
@@ -43,7 +43,7 @@ pub enum Separator {
 }
 
 /// Time format within a standard timestamp.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TimeFmt {
     /// `HH:MM:SS`
     Hms,
@@ -58,7 +58,7 @@ pub enum TimeFmt {
 }
 
 /// Timezone suffix on a timestamp.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Timezone {
     /// `Z` or `z` (UTC)
     Utc,

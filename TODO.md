@@ -70,17 +70,34 @@ later sections depend on earlier ones being solid.
 
 ## v0.4.1 – Minor changes
 
-- [ ] Fix failing py test (space before tz in RFC)
-- [ ] Deterministic formats order (when returning multiple formats)
-- [ ] Verify that all-nulls series is correctly cast as all-null datetime series
-- [ ] Rename `std` utility function in test
-- [ ] Evaluate if Standard -> polars_format can return str instead of String, or otherwise return String everywhere.
-- [ ] Add parse also to UnixFormat to match StandardFormat
-- [ ] Maybe separate DateFmt and StandardFormat into separate formats (DateFormat and DateTimeFormat)? In this case move Separator, TimeFmt and Timezone into DateTimeFormat and re-use methods of DateFormat in it
-- [ ] Check that parse_iso_date is actually compliant with ISO (eg year digits)
-- [ ] Add failure tests to test edge-cases that shouldn't pass that we may be missing
-- [ ] Remove restriction on Rfc2822 always requiring the time part
-- [ ] StandardFormat.validates shouldn't use parsing but just validating that single format
+- [x] Fix spaced timezone support
+  - Generalized to all date formats (not just RFC 2822): added `spaced_tz: bool` to `TimeComponent`
+  - Parser now tries both spaced and non-spaced timezone for all formats
+  - `polars_format()` emits space before tz when `spaced_tz=true`
+- [x] Deterministic formats order (when returning multiple formats)
+  - Derived `PartialOrd`/`Ord` on all format types
+  - Inference results sorted before returning
+- [x] Verify that all-nulls series is correctly cast as all-null datetime series
+  - `infer_format()` returns empty list for all-nulls (can't infer from no data)
+  - `to_datetime()` detects all-null series and returns an all-null `pl.Datetime` column
+  - Added Python tests verifying both behaviors
+- [x] Rename `std` utility function in test → `dt()`
+  - Also renamed `std` match variables to `sf` in non-test code
+- [x] Evaluate if Standard -> polars_format can return str instead of String
+  - Can't return `&str` (format string is composed dynamically)
+  - Made `UnixFormat::polars_format()` return `String` for API consistency
+- [x] Add `parse()` to `UnixFormat` to match `StandardFormat`
+  - `Format::parse()` now delegates to both `StandardFormat::parse()` and `UnixFormat::parse()`
+- [x] ~~Maybe separate DateFmt and StandardFormat~~ — evaluated, not needed
+  - Current `StandardFormat` enum with `DateOnly`/`DateTime` variants already provides this distinction
+- [x] Check that `parse_iso_date` is actually compliant with ISO
+  - Correctly enforces `YYYY-MM-DD` (4-digit year, leading zeros). Extended year not supported but irrelevant.
+- [x] Add failure tests for edge-cases
+  - Added 17 new tests: trailing garbage, partial/invalid timezones, zero month/day, Feb 30/31, double timezone, non-numeric parts, unix digit bounds
+- [x] Remove restriction on Rfc2822 always requiring the time part
+  - `Mon, 15 Jan 2024` now parses as date-only Rfc2822
+- [x] `StandardFormat.validates()` now validates single format directly
+  - Composes component parsers for only the specific format's components instead of parsing all formats
 
 ---
 

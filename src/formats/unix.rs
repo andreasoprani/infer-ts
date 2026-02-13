@@ -1,5 +1,5 @@
 /// Unix timestamp precision, distinguished by digit count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum UnixPrecision {
     /// 9–10 digits (seconds since epoch, ~1973–2286)
     Seconds,
@@ -24,20 +24,36 @@ impl UnixPrecision {
 }
 
 /// Unix epoch timestamp (bare integer).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnixFormat {
     pub precision: UnixPrecision,
 }
 
 impl UnixFormat {
+    /// Parse a value and return all matching `UnixFormat`s.
+    pub fn parse(value: &str) -> Vec<UnixFormat> {
+        UnixPrecision::all()
+            .iter()
+            .filter_map(|&precision| {
+                let uf = UnixFormat { precision };
+                if uf.validates(value) {
+                    Some(uf)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Polars-compatible format marker.
-    pub fn polars_format(&self) -> &'static str {
+    pub fn polars_format(&self) -> String {
         match self.precision {
             UnixPrecision::Seconds => "@unix_seconds",
             UnixPrecision::Milliseconds => "@unix_ms",
             UnixPrecision::Microseconds => "@unix_us",
             UnixPrecision::Nanoseconds => "@unix_ns",
         }
+        .to_string()
     }
 
     /// Validate a value as a Unix timestamp of this precision.

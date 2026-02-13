@@ -71,7 +71,9 @@ pub fn infer(values: &[Option<&str>], exhaustive: bool) -> Vec<Format> {
         return vec![];
     };
 
-    candidates.into_iter().collect()
+    let mut result: Vec<Format> = candidates.into_iter().collect();
+    result.sort();
+    result
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -89,13 +91,25 @@ mod tests {
     }
 
     // Format constructor helpers for concise test assertions
-    fn std(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
+    fn dt(date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>) -> Format {
         Format::Standard(StandardFormat::DateTime {
             date,
             time: crate::formats::TimeComponent {
                 separator: sep,
                 format: time,
                 timezone: tz,
+                spaced_tz: false,
+            },
+        })
+    }
+    fn dt_spaced_tz(date: DateFmt, sep: Separator, time: TimeFmt, tz: Timezone) -> Format {
+        Format::Standard(StandardFormat::DateTime {
+            date,
+            time: crate::formats::TimeComponent {
+                separator: sep,
+                format: time,
+                timezone: Some(tz),
+                spaced_tz: true,
             },
         })
     }
@@ -143,7 +157,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15T10:30:00", "2024-06-20T08:00:00"]),
             false,
-            &[std(Iso, T, Hms, None)],
+            &[dt(Iso, T, Hms, None)],
         );
     }
 
@@ -152,7 +166,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15T10:30:00Z"]),
             false,
-            &[std(Iso, T, Hms, Some(Utc))],
+            &[dt(Iso, T, Hms, Some(Utc))],
         );
     }
 
@@ -161,7 +175,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15T10:30:00+05:30"]),
             false,
-            &[std(Iso, T, Hms, Some(Offset))],
+            &[dt(Iso, T, Hms, Some(Offset))],
         );
     }
 
@@ -170,7 +184,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15T10:30:00.123"]),
             false,
-            &[std(Iso, T, HmsFrac, None)],
+            &[dt(Iso, T, HmsFrac, None)],
         );
     }
 
@@ -179,7 +193,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15T10:30:00.123Z"]),
             false,
-            &[std(Iso, T, HmsFrac, Some(Utc))],
+            &[dt(Iso, T, HmsFrac, Some(Utc))],
         );
     }
 
@@ -188,7 +202,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15T10:30:00.123+05:30"]),
             false,
-            &[std(Iso, T, HmsFrac, Some(Offset))],
+            &[dt(Iso, T, HmsFrac, Some(Offset))],
         );
     }
 
@@ -197,7 +211,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 10:30:00"]),
             false,
-            &[std(Iso, Space, Hms, None)],
+            &[dt(Iso, Space, Hms, None)],
         );
     }
 
@@ -206,7 +220,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 10:30:00.999999"]),
             false,
-            &[std(Iso, Space, HmsFrac, None)],
+            &[dt(Iso, Space, HmsFrac, None)],
         );
     }
 
@@ -215,7 +229,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 10:30:00Z"]),
             false,
-            &[std(Iso, Space, Hms, Some(Utc))],
+            &[dt(Iso, Space, Hms, Some(Utc))],
         );
     }
 
@@ -224,7 +238,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 10:30:00+05:30"]),
             false,
-            &[std(Iso, Space, Hms, Some(Offset))],
+            &[dt(Iso, Space, Hms, Some(Offset))],
         );
     }
 
@@ -233,7 +247,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 10:30:00.123Z"]),
             false,
-            &[std(Iso, Space, HmsFrac, Some(Utc))],
+            &[dt(Iso, Space, HmsFrac, Some(Utc))],
         );
     }
 
@@ -269,7 +283,7 @@ mod tests {
         assert_infer(
             &vals(&["01/15/2024 10:30:00"]),
             false,
-            &[std(SlashUS, Space, Hms, None)],
+            &[dt(SlashUS, Space, Hms, None)],
         );
     }
 
@@ -278,7 +292,7 @@ mod tests {
         assert_infer(
             &vals(&["15/01/2024 10:30:00"]),
             false,
-            &[std(SlashEU, Space, Hms, None)],
+            &[dt(SlashEU, Space, Hms, None)],
         );
     }
 
@@ -296,7 +310,7 @@ mod tests {
         assert_infer(
             &vals(&["20240115T103000"]),
             false,
-            &[std(Compact, T, HmsCompact, None)],
+            &[dt(Compact, T, HmsCompact, None)],
         );
     }
 
@@ -353,7 +367,7 @@ mod tests {
         assert_infer(
             &vals(&["01/02/2024 10:00:00", "15/03/2024 11:00:00"]),
             false,
-            &[std(SlashEU, Space, Hms, None)],
+            &[dt(SlashEU, Space, Hms, None)],
         );
     }
 
@@ -368,19 +382,19 @@ mod tests {
             Some("2024-06-20T08:00:00"),
             None,
         ];
-        assert_infer(&input, false, &[std(Iso, T, Hms, None)]);
+        assert_infer(&input, false, &[dt(Iso, T, Hms, None)]);
     }
 
     #[test]
     fn whitespace_only_skipped() {
         let input: Vec<Option<&str>> = vec![Some("   "), Some("2024-01-15T10:30:00"), Some("\t\n")];
-        assert_infer(&input, false, &[std(Iso, T, Hms, None)]);
+        assert_infer(&input, false, &[dt(Iso, T, Hms, None)]);
     }
 
     #[test]
     fn leading_trailing_whitespace_trimmed() {
         let input: Vec<Option<&str>> = vec![Some("  2024-01-15T10:30:00  ")];
-        assert_infer(&input, false, &[std(Iso, T, Hms, None)]);
+        assert_infer(&input, false, &[dt(Iso, T, Hms, None)]);
     }
 
     // ── Empty column handling ───────────────────────────────────────────────
@@ -426,8 +440,8 @@ mod tests {
     fn ambiguous_slash_datetimes_returns_both() {
         let input = vals(&["01/02/2024 10:00:00", "03/04/2024 11:00:00"]);
         let result = infer(&input, false);
-        assert!(result.contains(&std(SlashUS, Space, Hms, None)));
-        assert!(result.contains(&std(SlashEU, Space, Hms, None)));
+        assert!(result.contains(&dt(SlashUS, Space, Hms, None)));
+        assert!(result.contains(&dt(SlashEU, Space, Hms, None)));
         assert_eq!(result.len(), 2);
     }
 
@@ -436,25 +450,25 @@ mod tests {
     #[test]
     fn early_exit_iso8601_offset() {
         let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
-        assert_infer(&input, false, &[std(Iso, T, Hms, Some(Offset))]);
+        assert_infer(&input, false, &[dt(Iso, T, Hms, Some(Offset))]);
     }
 
     #[test]
     fn early_exit_iso8601_frac_utc() {
         let input = vals(&["2024-01-15T10:30:00.123Z", "GARBAGE"]);
-        assert_infer(&input, false, &[std(Iso, T, HmsFrac, Some(Utc))]);
+        assert_infer(&input, false, &[dt(Iso, T, HmsFrac, Some(Utc))]);
     }
 
     #[test]
     fn early_exit_space_offset() {
         let input = vals(&["2024-01-15 10:30:00+05:30", "GARBAGE"]);
-        assert_infer(&input, false, &[std(Iso, Space, Hms, Some(Offset))]);
+        assert_infer(&input, false, &[dt(Iso, Space, Hms, Some(Offset))]);
     }
 
     #[test]
     fn early_exit_compact_datetime() {
         let input = vals(&["20240115T103000", "GARBAGE"]);
-        assert_infer(&input, false, &[std(Compact, T, HmsCompact, None)]);
+        assert_infer(&input, false, &[dt(Compact, T, HmsCompact, None)]);
     }
 
     #[test]
@@ -470,7 +484,7 @@ mod tests {
         let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
 
         let non_exhaustive = infer(&input, false);
-        assert_eq!(non_exhaustive, vec![std(Iso, T, Hms, Some(Offset))]);
+        assert_eq!(non_exhaustive, vec![dt(Iso, T, Hms, Some(Offset))]);
 
         let exhaustive = infer(&input, true);
         assert_eq!(exhaustive, vec![]);
@@ -480,16 +494,16 @@ mod tests {
     fn exhaustive_mode_returns_single_when_unique() {
         let input = vals(&["2024-01-15T10:30:00+05:30"]);
 
-        assert_infer(&input, false, &[std(Iso, T, Hms, Some(Offset))]);
-        assert_infer(&input, true, &[std(Iso, T, Hms, Some(Offset))]);
+        assert_infer(&input, false, &[dt(Iso, T, Hms, Some(Offset))]);
+        assert_infer(&input, true, &[dt(Iso, T, Hms, Some(Offset))]);
     }
 
     #[test]
     fn exhaustive_mode_continues_after_single_candidate() {
         let input = vals(&["2024-01-15T10:30:00+05:30", "2024-06-20T08:00:00+02:00"]);
 
-        assert_infer(&input, false, &[std(Iso, T, Hms, Some(Offset))]);
-        assert_infer(&input, true, &[std(Iso, T, Hms, Some(Offset))]);
+        assert_infer(&input, false, &[dt(Iso, T, Hms, Some(Offset))]);
+        assert_infer(&input, true, &[dt(Iso, T, Hms, Some(Offset))]);
     }
 
     #[test]
@@ -505,7 +519,7 @@ mod tests {
         assert_infer(
             &vals(&["01/15/2024 2:30:00 PM", "06/20/2024 8:00:00 AM"]),
             false,
-            &[std(SlashUS, Space, Hms12, None)],
+            &[dt(SlashUS, Space, Hms12, None)],
         );
     }
 
@@ -514,7 +528,7 @@ mod tests {
         assert_infer(
             &vals(&["15/01/2024 2:30:00 PM", "20/06/2024 8:00:00 AM"]),
             false,
-            &[std(SlashEU, Space, Hms12, None)],
+            &[dt(SlashEU, Space, Hms12, None)],
         );
     }
 
@@ -523,7 +537,7 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 2:30:00 PM", "2024-06-20 8:00:00 AM"]),
             false,
-            &[std(Iso, Space, Hms12, None)],
+            &[dt(Iso, Space, Hms12, None)],
         );
     }
 
@@ -532,14 +546,14 @@ mod tests {
         assert_infer(
             &vals(&["01/02/2024 3:00:00 AM", "03/15/2024 4:00:00 PM"]),
             false,
-            &[std(SlashUS, Space, Hms12, None)],
+            &[dt(SlashUS, Space, Hms12, None)],
         );
     }
 
     #[test]
     fn early_exit_ampm() {
         let input = vals(&["2024-01-15 2:30:00 PM", "GARBAGE"]);
-        assert_infer(&input, false, &[std(Iso, Space, Hms12, None)]);
+        assert_infer(&input, false, &[dt(Iso, Space, Hms12, None)]);
     }
 
     // ── 12-hour AM/PM compact (no space before AM/PM) ───────────────────────
@@ -549,7 +563,7 @@ mod tests {
         assert_infer(
             &vals(&["01/15/2024 2:30:00PM", "06/20/2024 8:00:00AM"]),
             false,
-            &[std(SlashUS, Space, Hms12Compact, None)],
+            &[dt(SlashUS, Space, Hms12Compact, None)],
         );
     }
 
@@ -558,13 +572,45 @@ mod tests {
         assert_infer(
             &vals(&["2024-01-15 2:30:00PM", "2024-06-20 8:00:00AM"]),
             false,
-            &[std(Iso, Space, Hms12Compact, None)],
+            &[dt(Iso, Space, Hms12Compact, None)],
         );
     }
 
     #[test]
     fn early_exit_ampm_compact() {
         let input = vals(&["2024-01-15 2:30:00PM", "GARBAGE"]);
-        assert_infer(&input, false, &[std(Iso, Space, Hms12Compact, None)]);
+        assert_infer(&input, false, &[dt(Iso, Space, Hms12Compact, None)]);
+    }
+
+    // ── Spaced timezone inference ───────────────────────────────────────────
+
+    #[test]
+    fn infer_spaced_tz_offset() {
+        assert_infer(
+            &vals(&["2024-01-15 10:30:00 +05:30", "2024-06-20 08:00:00 +02:00"]),
+            false,
+            &[dt_spaced_tz(Iso, Space, Hms, Offset)],
+        );
+    }
+
+    #[test]
+    fn infer_spaced_tz_offset_compact() {
+        assert_infer(
+            &vals(&["2024-01-15T10:30:00 +0530", "2024-06-20T08:00:00 +0200"]),
+            false,
+            &[dt_spaced_tz(Iso, T, Hms, OffsetCompact)],
+        );
+    }
+
+    #[test]
+    fn infer_rfc2822_spaced_tz() {
+        assert_infer(
+            &vals(&[
+                "Mon, 15 Jan 2024 10:30:00 +0530",
+                "Thu, 20 Jun 2024 08:00:00 -0800",
+            ]),
+            false,
+            &[dt_spaced_tz(Rfc2822, Space, Hms, OffsetCompact)],
+        );
     }
 }

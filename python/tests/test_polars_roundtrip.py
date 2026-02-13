@@ -663,6 +663,19 @@ class TestEdgeCases:
         assert result[1] is None
         assert result[2] is not None
 
+    def test_all_nulls_returns_no_format(self):
+        """All-null series returns empty format list (can't infer from no data)."""
+        fmts = infer_ts.infer_format([None, None, None])
+        assert fmts == []
+
+    def test_all_nulls_to_datetime_returns_null_datetime(self):
+        """All-null series casts to all-null Datetime series."""
+        s = pl.Series("ts", [None, None, None], dtype=pl.Utf8)
+        result = infer_ts.to_datetime(s)
+        assert result.dtype == pl.Datetime
+        assert result.null_count() == 3
+        assert len(result) == 3
+
     def test_inferred_format_matches_expectation(self):
         """Verify the inferred format string is what we expect."""
         fmts = infer_ts.infer_format(["2024-01-15T10:30:00"])

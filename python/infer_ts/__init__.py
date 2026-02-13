@@ -58,6 +58,9 @@ def to_datetime(
         fmts = infer_format(values, exhaustive=exhaustive)
 
         if not fmts:
+            # All-null/empty series: return an all-null Datetime series
+            if series.null_count() == len(series):
+                return series.cast(pl.Datetime)
             raise ValueError("No timestamp format matches the values in the series")
 
         if len(fmts) > 1 and raise_on_multiple:
