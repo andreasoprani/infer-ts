@@ -66,10 +66,48 @@ fn infer_format_series(series: PySeries, exhaustive: bool) -> PyResult<Vec<Strin
     Ok(formats.iter().map(|f| f.polars_format()).collect())
 }
 
+/// Infer timestamp format(s) from any Python iterable of strings (streaming).
+///
+/// Pulls values lazily from the iterator — only reads as many values as needed
+/// for early-exit (when `exhaustive=False`).  This avoids materialising the
+/// entire column in memory on the Python side.
+///
+/// Args:
+///     iter: Any Python iterable yielding `str | None`.
+///     exhaustive: If `True`, consume the full iterator.
+///
+/// Returns:
+///     A list of Polars-compatible format strings.
+#[pyfunction]
+#[pyo3(signature = (iter, exhaustive=false))]
+fn infer_format_iter(iter: &Bound<'_, PyAny>, exhaustive: bool) -> PyResult<Vec<String>> {
+    let mut state = inference::InferState::new(exhaustive);
+
+    for item in iter.try_iter()? {
+        let item = item?;
+        if item.is_none() {
+            continue;
+        }
+        let s: String = item.extract()?;
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match state.feed(trimmed) {
+            inference::FeedResult::NoMatch => return Ok(vec![]),
+            inference::FeedResult::Done(fmt) => return Ok(vec![fmt.polars_format()]),
+            inference::FeedResult::Continue => {}
+        }
+    }
+
+    Ok(state.finish().iter().map(|f| f.polars_format()).collect())
+}
+
 #[pymodule]
 fn _infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(infer_format, m)?)?;
     m.add_function(wrap_pyfunction!(infer_format_series, m)?)?;
+    m.add_function(wrap_pyfunction!(infer_format_iter, m)?)?;
     m.add("__version__", "0.1.0")?;
     Ok(())
 }

@@ -15,7 +15,71 @@ use std::collections::HashSet;
 
 use crate::formats::Format;
 
-// ─── Inference Engine ────────────────────────────────────────────────────────
+// ─── Inference State Machine ─────────────────────────────────────────────────
+
+/// Incremental inference state that can be fed values one at a time.
+///
+/// This enables streaming use cases where values arrive lazily (e.g., from a
+/// Python iterator) without materialising the entire column in memory.
+pub struct InferState {
+    candidates: Option<HashSet<Format>>,
+    exhaustive: bool,
+}
+
+/// Result of feeding a value to [`InferState`].
+pub enum FeedResult {
+    /// Keep feeding more values.
+    Continue,
+    /// Inference is done — no formats match.
+    NoMatch,
+    /// Inference is done — early exit with a single format (non-exhaustive mode).
+    Done(Format),
+}
+
+impl InferState {
+    pub fn new(exhaustive: bool) -> Self {
+        Self {
+            candidates: None,
+            exhaustive,
+        }
+    }
+
+    /// Feed a single non-null, non-empty, already-trimmed value.
+    pub fn feed(&mut self, value: &str) -> FeedResult {
+        match &mut self.candidates {
+            None => {
+                self.candidates = Some(Format::parse(value).into_iter().collect());
+            }
+            Some(set) => {
+                set.retain(|fmt| fmt.validates(value));
+            }
+        }
+
+        if let Some(set) = &self.candidates {
+            match set.len() {
+                0 => return FeedResult::NoMatch,
+                1 if !self.exhaustive => {
+                    return FeedResult::Done(*set.iter().next().unwrap());
+                }
+                _ => {}
+            }
+        }
+
+        FeedResult::Continue
+    }
+
+    /// Finalise inference and return all surviving candidates (sorted).
+    pub fn finish(self) -> Vec<Format> {
+        let Some(candidates) = self.candidates else {
+            return vec![];
+        };
+        let mut result: Vec<Format> = candidates.into_iter().collect();
+        result.sort();
+        result
+    }
+}
+
+// ─── Convenience Function ────────────────────────────────────────────────────
 
 /// Run hybrid format inference over an iterator of (possibly null) string values.
 ///
@@ -38,7 +102,7 @@ pub fn infer<'a>(
     values: impl IntoIterator<Item = Option<&'a str>>,
     exhaustive: bool,
 ) -> Vec<Format> {
-    let mut candidates: Option<HashSet<Format>> = None;
+    let mut state = InferState::new(exhaustive);
 
     for opt_value in values {
         let value = match opt_value {
@@ -52,33 +116,14 @@ pub fn infer<'a>(
             None => continue,
         };
 
-        match &mut candidates {
-            None => {
-                // First non-null value: lazy domain construction via parsing
-                candidates = Some(Format::parse(value).into_iter().collect());
-            }
-            Some(set) => {
-                // Subsequent values: constraint propagation
-                set.retain(|fmt| fmt.validates(value));
-            }
-        }
-
-        if let Some(set) = &candidates {
-            match set.len() {
-                0 => return vec![],
-                1 if !exhaustive => return vec![*set.iter().next().unwrap()],
-                _ => {}
-            }
+        match state.feed(value) {
+            FeedResult::NoMatch => return vec![],
+            FeedResult::Done(fmt) => return vec![fmt],
+            FeedResult::Continue => {}
         }
     }
 
-    let Some(candidates) = candidates else {
-        return vec![];
-    };
-
-    let mut result: Vec<Format> = candidates.into_iter().collect();
-    result.sort();
-    result
+    state.finish()
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

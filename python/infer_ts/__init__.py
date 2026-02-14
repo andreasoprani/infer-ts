@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+from collections.abc import Iterable
+
 from ._infer_ts import __version__
 from ._infer_ts import infer_format as _infer_format_list
+from ._infer_ts import infer_format_iter as _infer_format_iter
 from ._infer_ts import infer_format_series as _infer_format_series
 
 if TYPE_CHECKING:
@@ -31,23 +34,24 @@ _EPOCH_UNITS: dict[str, tuple[Literal["ms", "us", "ns"], int]] = {
 
 
 def infer_format(
-    values: list[str | None] | pl.Series,
+    values: pl.Series | Iterable[str | None],
     *,
     exhaustive: bool = False,
 ) -> list[str]:
     """Infer timestamp format(s) from a string column.
 
-    Accepts either a Python list of strings or a Polars Series.
-    When a Series is passed, uses zero-copy Arrow access for efficiency.
+    Accepts a Polars Series or any iterable of strings (list, generator, etc.).
+    Series uses zero-copy Arrow access; iterables are consumed lazily (streaming),
+    so the full column never needs to be in memory at once.
+    Lists are detected at runtime and use a faster bulk path.
     """
-    try:
-        import polars as pl
+    import polars as pl
 
-        if isinstance(values, pl.Series):
-            return _infer_format_series(values, exhaustive=exhaustive)
-    except ImportError:
-        pass
-    return _infer_format_list(values, exhaustive=exhaustive)
+    if isinstance(values, pl.Series):
+        return _infer_format_series(values, exhaustive=exhaustive)
+    if isinstance(values, list):
+        return _infer_format_list(values, exhaustive=exhaustive)
+    return _infer_format_iter(iter(values), exhaustive=exhaustive)
 
 
 def to_datetime(

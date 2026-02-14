@@ -101,7 +101,7 @@ later sections depend on earlier ones being solid.
 
 ---
 
-## v0.5 – Performance & distribution
+## v0.5 – Performance
 
 - [x] Accept a Polars Series directly via PyO3 (avoid the Python list → `Vec` copy for large columns)
   - Added `pyo3-polars` (0.25) + `polars` (0.52) dependencies; upgraded pyo3 0.22→0.26
@@ -110,10 +110,13 @@ later sections depend on earlier ones being solid.
   - Python `infer_format()` dispatches to series path when given a `pl.Series`
   - `to_datetime()` uses series path directly (no more `series.to_list()`)
   - Requires `pyarrow` at runtime for pyo3-polars Series conversion
-- [ ] If feasible, make a single python function to infer a series or a list
-- [ ] Streaming / iterator interface for columns that don't fit in memory
-- [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
-- [ ] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour
+- [x] Streaming / iterator interface for columns that don't fit in memory
+  - Refactored inference engine into `InferState` struct with `feed()` + `finish()` methods
+  - `infer()` is now a thin wrapper over `InferState`
+  - New `infer_format_iter()` Rust function accepts any Python iterable, pulling values lazily
+  - Python `infer_format()` dispatches generators/iterables to the streaming path
+  - Early-exit works across the Python boundary — generator stops being consumed once format is resolved
+- [ ] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour and lazy dataframes support
 
 ---
 
@@ -130,3 +133,7 @@ later sections depend on earlier ones being solid.
   - ~~Current `Vec<Format>` return type prepares for trying formats in priority order~~
   - ~~Consider returning `InferResult` struct with: formats, confidence score, error details~~
   - Compositional format architecture now in place; extending formats is straightforward
+
+## v0.7 - Distribution
+
+- [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI

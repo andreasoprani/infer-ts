@@ -1,11 +1,13 @@
 """Type stubs for infer_ts."""
 
+from collections.abc import Iterable
+
 import polars as pl
 
 __version__: str
 
 def infer_format(
-    values: list[str | None] | pl.Series,
+    values: pl.Series | Iterable[str | None],
     *,
     exhaustive: bool = False,
 ) -> list[str]:

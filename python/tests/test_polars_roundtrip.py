@@ -774,5 +774,66 @@ class TestToDatetimeAPI:
         assert _dt(result, 0).year == 2024
 
 
+# ─── Iterator / streaming interface ──────────────────────────────────────────
+
+
+class TestIteratorInterface:
+    """Tests for the streaming iterator path (infer_format with iterables)."""
+
+    def test_generator(self):
+        """infer_format accepts a generator (lazy, no list materialisation)."""
+
+        def gen():
+            yield "2024-01-15T10:30:00"
+            yield "2024-06-20T08:00:00"
+
+        fmts = infer_ts.infer_format(gen())
+        assert fmts == ["%Y-%m-%dT%H:%M:%S"]
+
+    def test_generator_with_nones(self):
+        """Generator yielding None values are skipped."""
+
+        def gen():
+            yield None
+            yield "2024-01-15T10:30:00"
+            yield None
+
+        fmts = infer_ts.infer_format(gen())
+        assert fmts == ["%Y-%m-%dT%H:%M:%S"]
+
+    def test_generator_early_exit(self):
+        """Non-exhaustive mode stops pulling from the generator early."""
+        pulled = []
+
+        def gen():
+            # First value: unambiguous format (only one candidate)
+            pulled.append(1)
+            yield "2024-01-15T10:30:00+05:30"
+            # This value should NOT be pulled in non-exhaustive mode
+            pulled.append(2)
+            yield "GARBAGE"
+
+        fmts = infer_ts.infer_format(gen())
+        assert fmts == ["%Y-%m-%dT%H:%M:%S%:z"]
+        assert pulled == [1], "should have stopped after first value (early exit)"
+
+    def test_tuple_iterable(self):
+        """Accepts any iterable, not just generators."""
+        fmts = infer_ts.infer_format(
+            iter(("2024-01-15", "2024-06-20"))
+        )
+        assert fmts == ["%Y-%m-%d"]
+
+    def test_empty_generator(self):
+        """Empty generator returns empty list."""
+        fmts = infer_ts.infer_format(iter([]))
+        assert fmts == []
+
+    def test_list_still_works(self):
+        """List input still dispatches to the fast list path."""
+        fmts = infer_ts.infer_format(["2024-01-15T10:30:00"])
+        assert fmts == ["%Y-%m-%dT%H:%M:%S"]
+
+
 if __name__ == "__main__":
     _ = pytest.main([__file__, "-v"])
