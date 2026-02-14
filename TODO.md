@@ -116,16 +116,16 @@ later sections depend on earlier ones being solid.
   - New `infer_format_iter()` Rust function accepts any Python iterable, pulling values lazily
   - Python `infer_format()` dispatches generators/iterables to the streaming path
   - Early-exit works across the Python boundary — generator stops being consumed once format is resolved
-- [ ] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour and lazy dataframes support
+- [x] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour and lazy dataframes support
 
 ---
 
 ## v0.6 – Polars plugin (single-pass infer + cast)
 
+- [ ] Expose as a Polars expression plugin: `df.with_columns(pl.col("ts").infer_ts.to_datetime())`, simple setup with two passes, infer and then cast.
 - [ ] **Single-pass datetime parsing**
   - Infer format and cast to datetime in one pass over the data
   - Avoid the current two-pass approach (infer → cast)
-  - Expose as a Polars expression plugin: `df.with_columns(pl.col("ts").infer_ts.to_datetime())`
 - [ ] **Format hint parameter**
   - Accept an optional format hint to skip inference when format is known
   - Useful for performance when format is predetermined
