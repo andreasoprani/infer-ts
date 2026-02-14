@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from ._infer_ts import __version__, infer_format
+from ._infer_ts import __version__
+from ._infer_ts import infer_format as _infer_format_list
+from ._infer_ts import infer_format_series as _infer_format_series
 
 if TYPE_CHECKING:
     import polars as pl
@@ -26,6 +28,26 @@ _EPOCH_UNITS: dict[str, tuple[Literal["ms", "us", "ns"], int]] = {
     "@unix_us": ("us", 1),
     "@unix_ns": ("ns", 1),
 }
+
+
+def infer_format(
+    values: list[str | None] | pl.Series,
+    *,
+    exhaustive: bool = False,
+) -> list[str]:
+    """Infer timestamp format(s) from a string column.
+
+    Accepts either a Python list of strings or a Polars Series.
+    When a Series is passed, uses zero-copy Arrow access for efficiency.
+    """
+    try:
+        import polars as pl
+
+        if isinstance(values, pl.Series):
+            return _infer_format_series(values, exhaustive=exhaustive)
+    except ImportError:
+        pass
+    return _infer_format_list(values, exhaustive=exhaustive)
 
 
 def to_datetime(
@@ -54,8 +76,7 @@ def to_datetime(
     import polars as pl
 
     if format is None:
-        values = series.to_list()
-        fmts = infer_format(values, exhaustive=exhaustive)
+        fmts = _infer_format_series(series, exhaustive=exhaustive)
 
         if not fmts:
             # All-null/empty series: return an all-null Datetime series

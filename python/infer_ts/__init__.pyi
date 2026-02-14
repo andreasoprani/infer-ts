@@ -5,13 +5,17 @@ import polars as pl
 __version__: str
 
 def infer_format(
-    values: list[str | None],
+    values: list[str | None] | pl.Series,
+    *,
     exhaustive: bool = False,
 ) -> list[str]:
     """Infer timestamp format(s) from a string column using constraint elimination.
 
+    Accepts either a Python list of strings or a Polars Series.
+    When a Series is passed, uses zero-copy Arrow access for efficiency.
+
     Args:
-        values: A list of string values or None. None entries are skipped.
+        values: A list of string values (or None) or a Polars Series.
         exhaustive: If True, process all values and return all compatible formats.
                     If False (default), return as soon as only one format remains.
 

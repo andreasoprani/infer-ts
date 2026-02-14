@@ -12,7 +12,7 @@ strip = true
 name = "infer-ts"
 version = "0.1.0"
 description = "Infer timestamp formats from string columns using CSP constraint elimination"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -23,11 +23,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["polars", "pytest"]
+dev = ["polars", "pyarrow", "pytest"]
 
 [dependency-groups]
 dev = [
     "basedpyright>=1.37.4",
+    "pyarrow>=21.0.0",
 ]
 
 [tool.pyright]

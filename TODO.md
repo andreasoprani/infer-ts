@@ -103,12 +103,17 @@ later sections depend on earlier ones being solid.
 
 ## v0.5 – Performance & distribution
 
-- [ ] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour
-- [ ] Accept a Polars Series directly via PyO3 (avoid the Python list → `Vec`
-      copy for large columns) – requires the `polars` PyO3 bindings or a buffer
-      protocol path
+- [x] Accept a Polars Series directly via PyO3 (avoid the Python list → `Vec` copy for large columns)
+  - Added `pyo3-polars` (0.25) + `polars` (0.52) dependencies; upgraded pyo3 0.22→0.26
+  - New `infer_format_series()` Rust function accepts `PySeries` for zero-copy Arrow access
+  - Generalized `infer()` to accept `impl IntoIterator<Item = Option<&str>>`
+  - Python `infer_format()` dispatches to series path when given a `pl.Series`
+  - `to_datetime()` uses series path directly (no more `series.to_list()`)
+  - Requires `pyarrow` at runtime for pyo3-polars Series conversion
+- [ ] If feasible, make a single python function to infer a series or a list
 - [ ] Streaming / iterator interface for columns that don't fit in memory
 - [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
+- [ ] Benchmark on large columns (1 M+ rows) to confirm early-exit behaviour
 
 ---
 

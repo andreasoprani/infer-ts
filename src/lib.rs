@@ -11,11 +11,12 @@
 //! `@`-prefixed markers; see [`infer_format`] for details.
 
 use pyo3::prelude::*;
+use pyo3_polars::PySeries;
 
 mod formats;
 mod inference;
 
-/// Infer timestamp format(s) from a string column using compositional parsing.
+/// Infer timestamp format(s) from a Python list of strings.
 ///
 /// Parses the first non-null value to seed candidate formats, then validates
 /// subsequent values against those candidates.
@@ -30,38 +31,45 @@ mod inference;
 ///     For Unix epoch columns the return values include special markers like
 ///     `"@unix_seconds"`, `"@unix_ms"`, `"@unix_us"`, `"@unix_ns"`.
 ///     See the README for how to apply these with Polars.
-///
-/// Special cases:
-/// - Empty list: no format matches all values, or column is all nulls/empty
-/// - Multiple formats: ambiguous input (e.g., US vs EU date format)
-///
-/// Example (Python):
-/// ```python
-/// import infer_ts
-///
-/// # Default (non-exhaustive): returns as soon as unique format found
-/// infer_ts.infer_format(["2024-01-15T10:30:00", "2024-06-20T08:00:00"])
-/// # ['%Y-%m-%dT%H:%M:%S']
-///
-/// # Exhaustive: checks all values, returns all compatible formats
-/// infer_ts.infer_format(["01/02/2024", "03/04/2024"], exhaustive=True)
-/// # ['%d/%m/%Y', '%m/%d/%Y']  (both US and EU are compatible)
-///
-/// # No match returns empty list
-/// infer_ts.infer_format(["not a timestamp"])
-/// # []
-/// ```
 #[pyfunction]
 #[pyo3(signature = (values, exhaustive=false))]
 fn infer_format(values: Vec<Option<String>>, exhaustive: bool) -> Vec<String> {
     let refs: Vec<Option<&str>> = values.iter().map(|s| s.as_deref()).collect();
-    let formats = inference::infer(&refs, exhaustive);
+    let formats = inference::infer(refs, exhaustive);
     formats.iter().map(|f| f.polars_format()).collect()
+}
+
+/// Infer timestamp format(s) from a Polars Series (zero-copy).
+///
+/// Accepts a Polars `Series` of strings directly, avoiding the Python list
+/// intermediate and Rust `Vec<String>` allocation. The underlying Arrow
+/// `StringChunked` is iterated lazily with zero-copy access.
+///
+/// Args:
+///     series: A Polars Series with String (Utf8) dtype.
+///     exhaustive: If `True`, process all values and return all compatible formats.
+///                 If `False` (default), return as soon as only one format remains.
+///
+/// Returns:
+///     A list of Polars-compatible format strings.
+///
+/// Raises:
+///     TypeError: If the Series is not of String dtype.
+#[pyfunction]
+#[pyo3(signature = (series, exhaustive=false))]
+fn infer_format_series(series: PySeries, exhaustive: bool) -> PyResult<Vec<String>> {
+    let series = series.0;
+    let ca = series.str().map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!("expected a String Series: {e}"))
+    })?;
+    let formats = inference::infer(ca, exhaustive);
+    Ok(formats.iter().map(|f| f.polars_format()).collect())
 }
 
 #[pymodule]
 fn _infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(infer_format, m)?)?;
+    m.add_function(wrap_pyfunction!(infer_format_series, m)?)?;
     m.add("__version__", "0.1.0")?;
     Ok(())
 }

@@ -17,12 +17,14 @@ use crate::formats::Format;
 
 // ─── Inference Engine ────────────────────────────────────────────────────────
 
-/// Run hybrid format inference over a slice of (possibly null) string values.
+/// Run hybrid format inference over an iterator of (possibly null) string values.
 ///
 /// `None` entries and whitespace-only strings are skipped (treated as nulls).
 ///
 /// # Arguments
-/// * `values` - Slice of optional string values to infer format from
+/// * `values` - Iterator of optional string values to infer format from.
+///   Accepts `&[Option<&str>]`, `Vec<Option<&str>>`, or any `IntoIterator`
+///   yielding `Option<&str>` (e.g., a Polars `StringChunked` iterator).
 /// * `exhaustive` - If `true`, process all values and return all compatible formats.
 ///   If `false`, return as soon as only one format remains (early exit).
 ///
@@ -32,7 +34,10 @@ use crate::formats::Format;
 /// - If `exhaustive=true` or no early exit: all surviving formats
 /// - If no non-null values were seen: empty Vec (can't infer from no data)
 /// - If no format matches all values: empty Vec
-pub fn infer(values: &[Option<&str>], exhaustive: bool) -> Vec<Format> {
+pub fn infer<'a>(
+    values: impl IntoIterator<Item = Option<&'a str>>,
+    exhaustive: bool,
+) -> Vec<Format> {
     let mut candidates: Option<HashSet<Format>> = None;
 
     for opt_value in values {
@@ -132,7 +137,7 @@ mod tests {
 
     /// Assert inference result contains exactly these formats (order-independent).
     fn assert_infer(values: &[Option<&str>], exhaustive: bool, expected: &[Format]) {
-        let result = infer(values, exhaustive);
+        let result = infer(values.iter().copied(), exhaustive);
         assert_eq!(
             result.len(),
             expected.len(),
@@ -402,13 +407,13 @@ mod tests {
     #[test]
     fn all_nulls_returns_empty() {
         let input: Vec<Option<&str>> = vec![None, None, None];
-        assert_eq!(infer(&input, false), vec![]);
+        assert_eq!(infer(input.iter().copied(), false), vec![]);
     }
 
     #[test]
     fn empty_slice_returns_empty() {
         let input: Vec<Option<&str>> = vec![];
-        assert_eq!(infer(&input, false), vec![]);
+        assert_eq!(infer(input.iter().copied(), false), vec![]);
     }
 
     // ── No-match cases (return empty vec) ───────────────────────────────────
@@ -416,13 +421,13 @@ mod tests {
     #[test]
     fn incompatible_formats_no_match() {
         let input = vals(&["01/02/2024", "2024-01-15T10:30:00"]);
-        assert_eq!(infer(&input, false), vec![]);
+        assert_eq!(infer(input.iter().copied(), false), vec![]);
     }
 
     #[test]
     fn garbage_no_match() {
         let input = vals(&["not a timestamp at all"]);
-        assert_eq!(infer(&input, false), vec![]);
+        assert_eq!(infer(input.iter().copied(), false), vec![]);
     }
 
     // ── Multiple formats returned (ambiguous cases) ─────────────────────────
@@ -430,7 +435,7 @@ mod tests {
     #[test]
     fn ambiguous_slash_dates_returns_both() {
         let input = vals(&["01/02/2024", "03/04/2024", "05/06/2024"]);
-        let result = infer(&input, false);
+        let result = infer(input.iter().copied(), false);
         assert!(result.contains(&date_only(SlashUS)));
         assert!(result.contains(&date_only(SlashEU)));
         assert_eq!(result.len(), 2);
@@ -439,7 +444,7 @@ mod tests {
     #[test]
     fn ambiguous_slash_datetimes_returns_both() {
         let input = vals(&["01/02/2024 10:00:00", "03/04/2024 11:00:00"]);
-        let result = infer(&input, false);
+        let result = infer(input.iter().copied(), false);
         assert!(result.contains(&dt(SlashUS, Space, Hms, None)));
         assert!(result.contains(&dt(SlashEU, Space, Hms, None)));
         assert_eq!(result.len(), 2);
@@ -483,10 +488,10 @@ mod tests {
     fn exhaustive_mode_processes_all_values() {
         let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
 
-        let non_exhaustive = infer(&input, false);
+        let non_exhaustive = infer(input.iter().copied(), false);
         assert_eq!(non_exhaustive, vec![dt(Iso, T, Hms, Some(Offset))]);
 
-        let exhaustive = infer(&input, true);
+        let exhaustive = infer(input.iter().copied(), true);
         assert_eq!(exhaustive, vec![]);
     }
 
@@ -509,7 +514,7 @@ mod tests {
     #[test]
     fn exhaustive_empty_column_returns_empty() {
         let input: Vec<Option<&str>> = vec![None, None];
-        assert_eq!(infer(&input, true), vec![]);
+        assert_eq!(infer(input.iter().copied(), true), vec![]);
     }
 
     // ── 12-hour AM/PM inference ──────────────────────────────────────────────
