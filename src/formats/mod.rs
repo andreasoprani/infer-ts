@@ -28,7 +28,6 @@ pub use date::DateFmt;
 pub use datetime::TimeComponent;
 #[cfg(test)]
 pub use time::{Separator, TimeFmt, Timezone};
-#[cfg(test)]
 pub use unix::UnixPrecision;
 
 // ─── Top-Level Format Enum ───────────────────────────────────────────────────

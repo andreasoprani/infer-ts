@@ -122,7 +122,7 @@ later sections depend on earlier ones being solid.
 
 ## v0.6 – Polars plugin (single-pass infer + cast)
 
-- [ ] Expose as a Polars expression plugin: `df.with_columns(pl.col("ts").infer_ts.to_datetime())`, simple setup with two passes, infer and then cast.
+- [x] Expose as a Polars expression plugin: `df.with_columns(pl.col("ts").infer_ts.to_datetime())`, simple setup with two passes, infer and then cast.
 - [ ] **Single-pass datetime parsing**
   - Infer format and cast to datetime in one pass over the data
   - Avoid the current two-pass approach (infer → cast)

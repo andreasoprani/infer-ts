@@ -12,9 +12,14 @@
 
 use pyo3::prelude::*;
 use pyo3_polars::PySeries;
+use pyo3_polars::PolarsAllocator;
 
+mod expressions;
 mod formats;
 mod inference;
+
+#[global_allocator]
+static ALLOC: PolarsAllocator = PolarsAllocator::new();
 
 /// Infer timestamp format(s) from a Python list of strings.
 ///

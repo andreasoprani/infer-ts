@@ -18,10 +18,16 @@ from ._infer_ts import infer_format_series as _infer_format_series
 if TYPE_CHECKING:
     import polars as pl
 
+import infer_ts.namespace  # noqa: F401  — registers the expr namespace
+
+from infer_ts.functions import infer_format_expr, to_datetime_expr
+
 __all__ = [
     "__version__",
     "infer_format",
+    "infer_format_expr",
     "to_datetime",
+    "to_datetime_expr",
 ]
 
 # Mapping from @unix_* marker → (Polars time_unit, multiplier to reach that unit)

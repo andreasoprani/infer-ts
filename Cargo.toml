@@ -10,8 +10,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.26", features = ["macros", "abi3", "abi3-py39"] }
-pyo3-polars = { version = "0.25", default-features = false }
-polars = { version = "0.52", default-features = false }
+pyo3-polars = { version = "0.25", default-features = false, features = ["derive"] }
+polars = { version = "0.52", default-features = false, features = ["temporal", "strings"] }
+serde = { version = "1", features = ["derive"] }
 chrono = "0.4"
 
 [profile.release]
