@@ -757,22 +757,6 @@ class TestToDatetimeAPI:
         result = infer_ts.to_datetime(s, raise_on_multiple=False)
         assert result.dtype == pl.Date or result.dtype == pl.Datetime
 
-    def test_explicit_format_string(self):
-        """Explicit format= bypasses inference."""
-        s = pl.Series("ts", ["2024-01-15T10:30:00", "2024-06-20T08:00:00"])
-        result = infer_ts.to_datetime(s, format="%Y-%m-%dT%H:%M:%S")
-
-        assert result.dtype == pl.Datetime
-        assert _dt(result, 0).year == 2024
-
-    def test_explicit_epoch_format(self):
-        """Explicit format= with @unix_* marker."""
-        s = pl.Series("ts", ["1705312200", "1705398600"])
-        result = infer_ts.to_datetime(s, format="@unix_seconds")
-
-        assert result.dtype == pl.Datetime
-        assert _dt(result, 0).year == 2024
-
 
 # ─── Iterator / streaming interface ──────────────────────────────────────────
 

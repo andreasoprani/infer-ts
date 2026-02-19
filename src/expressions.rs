@@ -9,13 +9,12 @@ use pyo3_polars::export::polars_core::utils::CustomIterTools;
 use serde::Deserialize;
 
 use crate::formats::{Format, UnixPrecision};
-use crate::inference::{self, FeedResult, InferState};
+use crate::inference;
 
 // ─── kwargs ─────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
 struct ToDatetimeKwargs {
-    format: Option<String>,
     exhaustive: bool,
     raise_on_multiple: bool,
 }
@@ -40,26 +39,41 @@ fn to_datetime_expr(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult
     let ca = series.str()?;
     let name = series.name();
 
-    // Format hint: skip inference and parse directly with Polars' as_datetime.
-    if let Some(ref f) = kwargs.format {
-        if let Some(precision) = parse_unix_marker(f) {
-            return unix_to_datetime(ca, precision, name);
-        }
-        let ambiguous =
-            StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
-        let parsed = ca.as_datetime(
-            Some(f),
-            TimeUnit::Microseconds,
-            false, // use_cache
-            false, // tz_aware
-            None,  // tz
-            &ambiguous,
-        )?;
-        return Ok(parsed.into_series().with_name(name.clone()));
+    // Infer then delegate to Polars as_datetime with cache.
+    let formats = inference::infer(ca, kwargs.exhaustive);
+
+    if formats.is_empty() {
+        return Series::new_null(name.clone(), ca.len())
+            .cast(&DataType::Datetime(TimeUnit::Microseconds, None));
     }
 
-    // No format hint: single-pass inference + parse.
-    single_pass_infer_and_parse(ca, kwargs.exhaustive, kwargs.raise_on_multiple, name)
+    if formats.len() > 1 && kwargs.raise_on_multiple {
+        let fmt_strs: Vec<String> = formats.iter().map(|f| f.polars_format()).collect();
+        polars_bail!(ComputeError:
+            "multiple timestamp formats match: {:?}. \
+             Pass raise_on_multiple=False to use the first match.",
+            fmt_strs
+        );
+    }
+
+    let fmt = formats[0];
+
+    if let Format::Unix(uf) = fmt {
+        return unix_to_datetime(ca, uf.precision, name);
+    }
+
+    let polars_fmt = fmt.polars_format();
+    let ambiguous =
+        StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
+    let parsed = ca.as_datetime(
+        Some(&polars_fmt),
+        TimeUnit::Microseconds,
+        true,  // use_cache — key to matching native performance
+        false, // tz_aware
+        None,  // tz
+        &ambiguous,
+    )?;
+    Ok(parsed.into_series().with_name(name.clone()))
 }
 
 // ─── infer_format_expr ──────────────────────────────────────────────────────
@@ -81,114 +95,7 @@ fn infer_format_expr(inputs: &[Series], kwargs: InferFormatKwargs) -> PolarsResu
     Ok(result)
 }
 
-// ─── Single-pass inference + parse ──────────────────────────────────────────
-
-/// Infer format and parse to microseconds in a single pass over the Arrow column.
-///
-/// # Algorithm
-/// Values are fed to [`InferState`] one at a time. While format is unsettled,
-/// values are buffered as trimmed strings. On early exit (`FeedResult::Done`),
-/// buffered values are parsed immediately and subsequent values are parsed
-/// directly — no second iteration over the column is needed. In exhaustive or
-/// ambiguous cases all values are buffered and parsed once format is finalised.
-fn single_pass_infer_and_parse(
-    ca: &StringChunked,
-    exhaustive: bool,
-    raise_on_multiple: bool,
-    name: &PlSmallStr,
-) -> PolarsResult<Series> {
-    let mut state = InferState::new(exhaustive);
-    // Accumulates values (trimmed strings or None) seen before format is settled.
-    let mut buffer: Vec<Option<String>> = Vec::new();
-    let mut results: Vec<Option<i64>> = Vec::with_capacity(ca.len());
-    let mut settled_fmt: Option<Format> = None;
-
-    for opt_val in ca.into_iter() {
-        if let Some(fmt) = settled_fmt {
-            // Format is known — parse directly without touching the buffer.
-            match opt_val {
-                None => results.push(None),
-                Some(v) => results.push(fmt.parse_to_us(v.trim())),
-            }
-        } else {
-            match opt_val {
-                None => buffer.push(None),
-                Some(v) => {
-                    let trimmed = v.trim();
-                    match state.feed(trimmed) {
-                        FeedResult::NoMatch => {
-                            polars_bail!(ComputeError: "no timestamp format matches the values");
-                        }
-                        FeedResult::Done(fmt) => {
-                            settled_fmt = Some(fmt);
-                            // Parse all buffered values accumulated during inference.
-                            for opt in buffer.drain(..) {
-                                match opt {
-                                    None => results.push(None),
-                                    Some(s) => results.push(fmt.parse_to_us(&s)),
-                                }
-                            }
-                            // Parse the current value.
-                            results.push(fmt.parse_to_us(trimmed));
-                        }
-                        FeedResult::Continue => {
-                            // Store the trimmed string so we can parse it once settled.
-                            buffer.push(Some(trimmed.to_string()));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Handle the case where inference never completed via early exit.
-    // This happens in exhaustive mode or when the format remains ambiguous.
-    if settled_fmt.is_none() {
-        let formats = state.finish();
-
-        if formats.is_empty() {
-            // All values were null — return an all-null datetime series.
-            return Series::new_null(name.clone(), ca.len())
-                .cast(&DataType::Datetime(TimeUnit::Microseconds, None));
-        }
-
-        if formats.len() > 1 && raise_on_multiple {
-            let fmt_strs: Vec<String> = formats.iter().map(|f| f.polars_format()).collect();
-            polars_bail!(ComputeError:
-                "multiple timestamp formats match: {:?}. \
-                 Pass raise_on_multiple=False to use the first match, \
-                 or pass format= explicitly.",
-                fmt_strs
-            );
-        }
-
-        let fmt = formats[0];
-        for opt in buffer.drain(..) {
-            match opt {
-                None => results.push(None),
-                Some(s) => results.push(fmt.parse_to_us(&s)),
-            }
-        }
-    }
-
-    let int_ca: Int64Chunked = results.into_iter().collect();
-    Ok(int_ca
-        .into_datetime(TimeUnit::Microseconds, None)
-        .into_series()
-        .with_name(name.clone()))
-}
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-fn parse_unix_marker(fmt: &str) -> Option<UnixPrecision> {
-    match fmt {
-        "@unix_seconds" => Some(UnixPrecision::Seconds),
-        "@unix_ms" => Some(UnixPrecision::Milliseconds),
-        "@unix_us" => Some(UnixPrecision::Microseconds),
-        "@unix_ns" => Some(UnixPrecision::Nanoseconds),
-        _ => None,
-    }
-}
 
 fn unix_to_datetime(
     ca: &StringChunked,

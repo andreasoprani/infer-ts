@@ -63,7 +63,6 @@ def infer_format(
 def to_datetime(
     series: pl.Series,
     *,
-    format: str | None = None,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
 ) -> pl.Series:
@@ -71,9 +70,7 @@ def to_datetime(
 
     Args:
         series: A Polars Series of strings to parse.
-        format: Optional format string (strftime or ``@unix_*`` marker).
-                If *None*, infers from values.
-        exhaustive: Passed to :func:`infer_format` when *format* is None.
+        exhaustive: If *True*, check all values during inference.
         raise_on_multiple: If *True* (default), raise :class:`ValueError`
             when multiple formats match.  If *False*, use the first match.
 
@@ -85,26 +82,21 @@ def to_datetime(
     """
     import polars as pl
 
-    if format is None:
-        fmts = _infer_format_series(series, exhaustive=exhaustive)
+    fmts = _infer_format_series(series, exhaustive=exhaustive)
 
-        if not fmts:
-            # All-null/empty series: return an all-null Datetime series
-            if series.null_count() == len(series):
-                return series.cast(pl.Datetime)
-            raise ValueError("No timestamp format matches the values in the series")
+    if not fmts:
+        # All-null/empty series: return an all-null Datetime series
+        if series.null_count() == len(series):
+            return series.cast(pl.Datetime)
+        raise ValueError("No timestamp format matches the values in the series")
 
-        if len(fmts) > 1 and raise_on_multiple:
-            raise ValueError(
-                f"Multiple timestamp formats match the values: {fmts}. "
-                + "Pass raise_on_multiple=False to use the first match, "
-                + "or pass format= explicitly."
-            )
+    if len(fmts) > 1 and raise_on_multiple:
+        raise ValueError(
+            f"Multiple timestamp formats match the values: {fmts}. "
+            + "Pass raise_on_multiple=False to use the first match."
+        )
 
-        fmt = fmts[0]
-    else:
-        fmt = format
-
+    fmt = fmts[0]
     if fmt in _EPOCH_UNITS:
         unit, multiplier = _EPOCH_UNITS[fmt]
         return (series.cast(pl.Int64) * multiplier).cast(pl.Datetime(unit))

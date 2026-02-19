@@ -19,10 +19,14 @@ later sections depend on earlier ones being solid.
   - ~~Current `Vec<Format>` return type prepares for trying formats in priority order~~
   - ~~Consider returning `InferResult` struct with: formats, confidence score, error details~~
   - Compositional format architecture now in place; extending formats is straightforward
-- [ ] Speed up execution to try to match native polars casting performance
+- [x] Speed up execution to try to match native polars casting performance
 - [ ] Allow the user to define the datetime time_unit they want (ns, us or ms)
-- [ ] Remove `format` from to_datetime kwargs, it's pretty useless, if one already knows the format they can use native casting.
+- [x] Remove `format` from to_datetime kwargs, it's pretty useless, if one already knows the format they can use native casting.
 
 ## v0.7 - Distribution
 
 - [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
+
+## v0.8 - Performance
+
+- [ ] Investigate how to do single-pass infer and cast without huge differences in performance. We tried a naïve approach but it was 3x slower than native polars casting while if done properly the overhead should be negligible. Currently we are just doing a parsing pass and a casting pass piggybacking on polars' casting speed, but for exhaustive parsing or series entirely compatible with multiple formats this means parsing the whole series once and then casting it.

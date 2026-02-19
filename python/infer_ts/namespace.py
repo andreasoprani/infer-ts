@@ -21,20 +21,17 @@ class ExprInferTsNamespace:
     def to_datetime(
         self,
         *,
-        format: str | None = None,
         exhaustive: bool = False,
         raise_on_multiple: bool = True,
     ) -> pl.Expr:
         """Infer timestamp format and cast to Datetime.
 
         Args:
-            format: Optional format hint to skip inference.
             exhaustive: If *True*, check all values during inference.
             raise_on_multiple: If *True*, error when multiple formats match.
         """
         return to_datetime_expr(
             self._expr,
-            format=format,
             exhaustive=exhaustive,
             raise_on_multiple=raise_on_multiple,
         )

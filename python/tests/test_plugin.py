@@ -73,31 +73,6 @@ class TestToDatetime:
         assert _dt(result["ts"], 0).day == 15
 
 
-# ─── Format hint ─────────────────────────────────────────────────────────────
-
-
-class TestFormatHint:
-    """Passing format= to skip inference."""
-
-    def test_format_hint_iso(self):
-        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
-        result = df.with_columns(
-            pl.col("ts").infer_ts.to_datetime(format="%Y-%m-%dT%H:%M:%S")
-        )
-
-        assert result["ts"].dtype == pl.Datetime
-        assert _dt(result["ts"], 0).hour == 10
-
-    def test_format_hint_custom(self):
-        df = pl.DataFrame({"ts": ["2024-01-15 10:30:00"]})
-        result = df.with_columns(
-            pl.col("ts").infer_ts.to_datetime(format="%Y-%m-%d %H:%M:%S")
-        )
-
-        assert result["ts"].dtype == pl.Datetime
-        assert _dt(result["ts"], 0).day == 15
-
-
 # ─── Unix epoch ──────────────────────────────────────────────────────────────
 
 

@@ -45,9 +45,7 @@ class TestEarlyExitUnambiguous:
 
     def test_exhaustive_slower_than_early_exit(self, series: pl.Series):
         t_early, _ = _time(lambda: infer_ts.infer_format(series))
-        t_exhaust, fmts = _time(
-            lambda: infer_ts.infer_format(series, exhaustive=True)
-        )
+        t_exhaust, fmts = _time(lambda: infer_ts.infer_format(series, exhaustive=True))
         assert fmts == ["%Y-%m-%dT%H:%M:%S%:z"]
         assert t_early * 10 < t_exhaust, (
             f"early-exit ({t_early:.4f}s) should be >=10× faster "
@@ -91,16 +89,10 @@ class TestSeriesVsList:
         lst = series.to_list()
         return series, lst
 
-    def test_series_faster_than_list(
-        self, data: tuple[pl.Series, list[str]]
-    ):
+    def test_series_faster_than_list(self, data: tuple[pl.Series, list[str]]):
         series, lst = data
-        t_series, fmts_s = _time(
-            lambda: infer_ts.infer_format(series, exhaustive=True)
-        )
-        t_list, fmts_l = _time(
-            lambda: infer_ts.infer_format(lst, exhaustive=True)
-        )
+        t_series, fmts_s = _time(lambda: infer_ts.infer_format(series, exhaustive=True))
+        t_list, fmts_l = _time(lambda: infer_ts.infer_format(lst, exhaustive=True))
         assert fmts_s == fmts_l
         assert t_series < t_list, (
             f"Series path ({t_series:.4f}s) should be faster "
@@ -205,9 +197,7 @@ class TestPluginVsNativePolars:
         """Plugin produces byte-identical Datetime(us) values to native Polars."""
         n = 10_000
         df = pl.DataFrame({"ts": [sample] * n})
-        native = df.with_columns(
-            pl.col("ts").str.to_datetime(format=polars_fmt)
-        )["ts"]
+        native = df.with_columns(pl.col("ts").str.to_datetime(format=polars_fmt))["ts"]
         plugin = df.with_columns(pl.col("ts").infer_ts.to_datetime())["ts"]
         assert native.dtype == plugin.dtype == pl.Datetime
         assert (native == plugin).all(), (
@@ -221,11 +211,13 @@ class TestPluginVsNativePolars:
     def large_iso_df(self) -> pl.DataFrame:
         return pl.DataFrame({"ts": ["2024-01-15T10:30:00"] * N})
 
-    def test_single_pass_within_10x_of_native(self, large_iso_df: pl.DataFrame):
-        """Single-pass inference+parse is within 10× of native on 1M ISO rows.
+    def test_to_datetime_within_1p5x_of_native(self, large_iso_df: pl.DataFrame):
+        """Inference+parse is within 1.5× of native on 1M ISO rows.
 
-        On this machine the ratio is ~3×; the 10× bound absorbs jitter and
-        slower CI environments while still catching serious regressions.
+        The plugin piggybacks on Polars' as_datetime with cache=True, so the
+        only overhead is inference (fast early-exit) plus the expression-plugin
+        FFI round-trip. On this machine the ratio is ~1.1×; the 1.5× bound
+        absorbs jitter and slower CI environments while still catching regressions.
         """
         t_native, _ = _time(
             lambda: large_iso_df.with_columns(
@@ -235,31 +227,8 @@ class TestPluginVsNativePolars:
         t_plugin, _ = _time(
             lambda: large_iso_df.with_columns(pl.col("ts").infer_ts.to_datetime())
         )
-        assert t_plugin < t_native * 10, (
-            f"Plugin ({t_plugin:.3f}s) more than 10× slower than "
-            f"native Polars ({t_native:.3f}s)"
-        )
-
-    def test_format_hint_within_5x_of_native(self, large_iso_df: pl.DataFrame):
-        """With an explicit format hint, plugin overhead is within 5× of native.
-
-        The hint path delegates straight to Polars as_datetime(); the residual
-        overhead is the expression-plugin framework (FFI + type-check). On this
-        machine the ratio is ~3.5×.
-        """
-        fmt = "%Y-%m-%dT%H:%M:%S"
-        t_native, _ = _time(
-            lambda: large_iso_df.with_columns(
-                pl.col("ts").str.to_datetime(format=fmt)
-            )
-        )
-        t_hint, _ = _time(
-            lambda: large_iso_df.with_columns(
-                pl.col("ts").infer_ts.to_datetime(format=fmt)
-            )
-        )
-        assert t_hint < t_native * 5, (
-            f"Format-hint plugin ({t_hint:.3f}s) more than 5× slower than "
+        assert t_plugin < t_native * 1.5, (
+            f"Plugin ({t_plugin:.3f}s) more than 1.5× slower than "
             f"native Polars ({t_native:.3f}s)"
         )
 

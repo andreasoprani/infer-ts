@@ -22,7 +22,6 @@ __all__ = ["to_datetime_expr", "infer_format_expr"]
 def to_datetime_expr(
     expr: pl.Expr,
     *,
-    format: str | None = None,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
 ) -> pl.Expr:
@@ -32,7 +31,6 @@ def to_datetime_expr(
 
     Args:
         expr: A Polars expression producing a String column.
-        format: Optional format hint to skip inference.
         exhaustive: If *True*, check all values during inference.
         raise_on_multiple: If *True*, error when multiple formats match.
 
@@ -45,7 +43,6 @@ def to_datetime_expr(
         args=[expr],
         is_elementwise=False,
         kwargs={
-            "format": format,
             "exhaustive": exhaustive,
             "raise_on_multiple": raise_on_multiple,
         },
