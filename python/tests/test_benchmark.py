@@ -179,5 +179,90 @@ class TestLazyFrame:
         assert elapsed < 0.2, f"lazy-then-infer took {elapsed:.3f}s"
 
 
+# ─── Test 6: Plugin performance vs native Polars str.to_datetime ─────────────
+
+
+class TestPluginVsNativePolars:
+    """Single-pass plugin (inference + parse) vs Polars native str.to_datetime.
+
+    Correctness: both paths produce byte-identical Datetime(us) values.
+    Performance: plugin overhead is within an acceptable multiple of native
+    to guard against regressions in the single-pass implementation.
+    """
+
+    # ── Correctness ──────────────────────────────────────────────────────────
+
+    @pytest.mark.parametrize(
+        "polars_fmt,sample",
+        [
+            ("%Y-%m-%dT%H:%M:%S", "2024-01-15T10:30:00"),
+            ("%Y-%m-%d %H:%M:%S", "2024-01-15 10:30:00"),
+            ("%Y-%m-%dT%H:%M:%S%.f", "2024-01-15T10:30:00.123456"),
+            ("%Y-%m-%d", "2024-01-15"),
+        ],
+    )
+    def test_values_match_native(self, polars_fmt: str, sample: str):
+        """Plugin produces byte-identical Datetime(us) values to native Polars."""
+        n = 10_000
+        df = pl.DataFrame({"ts": [sample] * n})
+        native = df.with_columns(
+            pl.col("ts").str.to_datetime(format=polars_fmt)
+        )["ts"]
+        plugin = df.with_columns(pl.col("ts").infer_ts.to_datetime())["ts"]
+        assert native.dtype == plugin.dtype == pl.Datetime
+        assert (native == plugin).all(), (
+            f"values differ for format {polars_fmt!r}: "
+            f"native={native[0]!r}, plugin={plugin[0]!r}"
+        )
+
+    # ── Performance ──────────────────────────────────────────────────────────
+
+    @pytest.fixture(scope="class")
+    def large_iso_df(self) -> pl.DataFrame:
+        return pl.DataFrame({"ts": ["2024-01-15T10:30:00"] * N})
+
+    def test_single_pass_within_10x_of_native(self, large_iso_df: pl.DataFrame):
+        """Single-pass inference+parse is within 10× of native on 1M ISO rows.
+
+        On this machine the ratio is ~3×; the 10× bound absorbs jitter and
+        slower CI environments while still catching serious regressions.
+        """
+        t_native, _ = _time(
+            lambda: large_iso_df.with_columns(
+                pl.col("ts").str.to_datetime(format="%Y-%m-%dT%H:%M:%S")
+            )
+        )
+        t_plugin, _ = _time(
+            lambda: large_iso_df.with_columns(pl.col("ts").infer_ts.to_datetime())
+        )
+        assert t_plugin < t_native * 10, (
+            f"Plugin ({t_plugin:.3f}s) more than 10× slower than "
+            f"native Polars ({t_native:.3f}s)"
+        )
+
+    def test_format_hint_within_5x_of_native(self, large_iso_df: pl.DataFrame):
+        """With an explicit format hint, plugin overhead is within 5× of native.
+
+        The hint path delegates straight to Polars as_datetime(); the residual
+        overhead is the expression-plugin framework (FFI + type-check). On this
+        machine the ratio is ~3.5×.
+        """
+        fmt = "%Y-%m-%dT%H:%M:%S"
+        t_native, _ = _time(
+            lambda: large_iso_df.with_columns(
+                pl.col("ts").str.to_datetime(format=fmt)
+            )
+        )
+        t_hint, _ = _time(
+            lambda: large_iso_df.with_columns(
+                pl.col("ts").infer_ts.to_datetime(format=fmt)
+            )
+        )
+        assert t_hint < t_native * 5, (
+            f"Format-hint plugin ({t_hint:.3f}s) more than 5× slower than "
+            f"native Polars ({t_native:.3f}s)"
+        )
+
+
 if __name__ == "__main__":
     _ = pytest.main([__file__, "-v"])

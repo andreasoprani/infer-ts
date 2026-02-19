@@ -18,6 +18,7 @@ mod datetime;
 mod time;
 mod unix;
 
+
 pub use date::DateFormat;
 pub use datetime::DateTimeFormat;
 pub use unix::UnixFormat;
@@ -78,6 +79,58 @@ impl Format {
             Format::Date(df) => df.polars_format(),
             Format::DateTime(dtf) => dtf.polars_format(),
             Format::Unix(unix) => unix.polars_format(),
+        }
+    }
+
+    /// Parse `value` (already trimmed) to microseconds since the Unix epoch.
+    ///
+    /// Returns `None` if `value` is not a valid instance of this format.
+    /// Timezone offsets in datetime strings are consumed but ignored — the
+    /// wall-clock time is returned as-is (same semantics as Polars'
+    /// `str.to_datetime(format=..., use_utc=false)`).
+    pub fn parse_to_us(&self, value: &str) -> Option<i64> {
+        match self {
+            Format::Unix(uf) => {
+                let n: i64 = value.parse().ok()?;
+                match uf.precision {
+                    UnixPrecision::Seconds => n.checked_mul(1_000_000),
+                    UnixPrecision::Milliseconds => n.checked_mul(1_000),
+                    UnixPrecision::Microseconds => Some(n),
+                    UnixPrecision::Nanoseconds => Some(n / 1_000),
+                }
+            }
+            Format::Date(df) => {
+                let (date, remaining) = date::parse_date_value(value, df.date)?;
+                if !remaining.is_empty() {
+                    return None;
+                }
+                let midnight = chrono::NaiveTime::from_hms_opt(0, 0, 0)?;
+                let dt = date.and_time(midnight);
+                Some(dt.and_utc().timestamp_micros())
+            }
+            Format::DateTime(dtf) => {
+                let (date, after_date) = date::parse_date_value(value, dtf.date)?;
+                let after_sep = time::parse_separator(after_date, dtf.time.separator)?;
+                let (t, after_time) = time::parse_time_value(after_sep, dtf.time.format)?;
+                let remaining = match dtf.time.timezone {
+                    None => after_time,
+                    Some(tz) => {
+                        let tz_input = if dtf.time.spaced_tz {
+                            if after_time.is_empty() || after_time.as_bytes()[0] != b' ' {
+                                return None;
+                            }
+                            &after_time[1..]
+                        } else {
+                            after_time
+                        };
+                        time::parse_timezone(tz_input, tz)?
+                    }
+                };
+                if !remaining.is_empty() {
+                    return None;
+                }
+                Some(date.and_time(t).and_utc().timestamp_micros())
+            }
         }
     }
 

@@ -1,3 +1,5 @@
+use chrono::NaiveTime;
+
 // ─── Time Component Enums ───────────────────────────────────────────────────
 
 /// Separator between date and time components.
@@ -252,6 +254,99 @@ pub(super) fn parse_time(s: &str, fmt: TimeFmt) -> Option<&str> {
             Some(&s[consumed..])
         }
     }
+}
+
+/// Parse a time from the start of `s` for the given format.
+/// Returns `(time, remaining)` on success.
+pub(super) fn parse_time_value(s: &str, fmt: TimeFmt) -> Option<(NaiveTime, &str)> {
+    match fmt {
+        TimeFmt::Hms => {
+            if s.len() < 8 {
+                return None;
+            }
+            parse_hms(&s[..8])?;
+            if s.len() > 8 && s.as_bytes()[8] == b'.' {
+                return None;
+            }
+            let h: u32 = s[0..2].parse().ok()?;
+            let m: u32 = s[3..5].parse().ok()?;
+            let sec: u32 = s[6..8].parse().ok()?;
+            let time = NaiveTime::from_hms_opt(h, m, sec)?;
+            Some((time, &s[8..]))
+        }
+        TimeFmt::HmsFrac => {
+            if s.len() < 8 {
+                return None;
+            }
+            parse_hms(&s[..8])?;
+            let (frac_digits, remaining) = parse_frac(&s[8..])?;
+            let h: u32 = s[0..2].parse().ok()?;
+            let m: u32 = s[3..5].parse().ok()?;
+            let sec: u32 = s[6..8].parse().ok()?;
+            let frac_str = &s[9..9 + frac_digits];
+            let micros = frac_str_to_micros(frac_str)?;
+            let time = NaiveTime::from_hms_micro_opt(h, m, sec, micros)?;
+            Some((time, remaining))
+        }
+        TimeFmt::HmsCompact => {
+            if s.len() < 6 {
+                return None;
+            }
+            let time_str = &s[..6];
+            if !time_str.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            let h: u32 = time_str[0..2].parse().ok()?;
+            let m: u32 = time_str[2..4].parse().ok()?;
+            let sec: u32 = time_str[4..6].parse().ok()?;
+            if h > 23 || m > 59 || sec > 59 {
+                return None;
+            }
+            let time = NaiveTime::from_hms_opt(h, m, sec)?;
+            Some((time, &s[6..]))
+        }
+        TimeFmt::Hms12 => parse_hms12_value(s, true),
+        TimeFmt::Hms12Compact => parse_hms12_value(s, false),
+    }
+}
+
+/// Convert a fractional-seconds string (1–9 digits) to microseconds.
+fn frac_str_to_micros(frac_str: &str) -> Option<u32> {
+    let len = frac_str.len();
+    if len <= 6 {
+        let value: u32 = frac_str.parse().ok()?;
+        Some(value * 10u32.pow((6 - len) as u32))
+    } else {
+        frac_str[..6].parse().ok()
+    }
+}
+
+/// Parse a 12-hour time and return `(NaiveTime, remaining)`.
+fn parse_hms12_value(s: &str, space_before_ampm: bool) -> Option<(NaiveTime, &str)> {
+    let consumed = parse_hms12(s, space_before_ampm)?;
+
+    let b = s.as_bytes();
+    let colon1 = if b.len() > 1 && b[1] == b':' { 1 } else { 2 };
+    let h: u32 = s[..colon1].parse().ok()?;
+    let rest = &s[colon1..];
+    let m: u32 = rest[1..3].parse().ok()?;
+    let sec: u32 = rest[4..6].parse().ok()?;
+
+    let suffix_start = colon1 + 6;
+    let ampm = if space_before_ampm {
+        &s[suffix_start + 1..suffix_start + 3]
+    } else {
+        &s[suffix_start..suffix_start + 2]
+    };
+    let is_pm = ampm.eq_ignore_ascii_case("PM");
+    let h24 = if is_pm {
+        if h == 12 { 12 } else { h + 12 }
+    } else {
+        if h == 12 { 0 } else { h }
+    };
+
+    let time = NaiveTime::from_hms_opt(h24, m, sec)?;
+    Some((time, &s[consumed..]))
 }
 
 /// Parse a timezone suffix from the start of `s`.
