@@ -37,12 +37,24 @@ data) and flexible (use `exhaustive=True` to validate the _entire_ column).
 | ISO 8601 + frac + offset     | `2024-01-15T10:30:00.123456+05:30` | `%Y-%m-%dT%H:%M:%S%.f%:z` |
 | ISO 8601 + frac + compact tz | `2024-01-15T10:30:00.123456+0530`  | `%Y-%m-%dT%H:%M:%S%.f%z`  |
 | Space datetime               | `2024-01-15 10:30:00`              | `%Y-%m-%d %H:%M:%S`       |
+| Space datetime + UTC         | `2024-01-15 10:30:00Z`             | `%Y-%m-%d %H:%M:%SZ`      |
+| Space datetime + offset      | `2024-01-15 10:30:00+05:30`        | `%Y-%m-%d %H:%M:%S%:z`    |
 | Space datetime + frac        | `2024-01-15 10:30:00.123456`       | `%Y-%m-%d %H:%M:%S%.f`    |
 | Date only (ISO)              | `2024-01-15`                       | `%Y-%m-%d`                |
 | US slash date                | `01/15/2024`                       | `%m/%d/%Y`                |
 | EU slash date                | `15/01/2024`                       | `%d/%m/%Y`                |
+| US slash date (2-digit year) | `01/15/24`                         | `%m/%d/%y`                |
+| EU slash date (2-digit year) | `15/01/24`                         | `%d/%m/%y`                |
 | US slash datetime            | `01/15/2024 10:30:00`              | `%m/%d/%Y %H:%M:%S`       |
 | EU slash datetime            | `15/01/2024 10:30:00`              | `%d/%m/%Y %H:%M:%S`       |
+| Dot-separated date           | `15.01.2024`                       | `%d.%m.%Y`                |
+| Dot-separated datetime       | `15.01.2024 10:30:00`              | `%d.%m.%Y %H:%M:%S`       |
+| Month-name US                | `Jan 15, 2024`                     | `%b %d, %Y`               |
+| Month-name EU                | `15 Jan 2024`                      | `%d %b %Y`                |
+| Month-name US datetime       | `Jan 15, 2024 10:30:00`            | `%b %d, %Y %H:%M:%S`      |
+| Month-name EU datetime       | `15 Jan 2024 10:30:00`             | `%d %b %Y %H:%M:%S`       |
+| 12-hour AM/PM                | `2024-01-15 10:30:00 PM`           | `%Y-%m-%d %I:%M:%S %p`    |
+| RFC 2822                     | `Tue, 15 Jan 2024 10:30:00 +0000`  | `%a, %d %b %Y %H:%M:%S%z` |
 | Compact date                 | `20240115`                         | `%Y%m%d`                  |
 | Compact datetime             | `20240115T103000`                  | `%Y%m%dT%H%M%S`           |
 | Unix seconds                 | `1705312200`                       | `@unix_seconds`           |
@@ -69,21 +81,23 @@ Internally, formats are represented using a compositional structure rather than 
 
 ```
 Format
-├── Standard(StandardFormat)
-│   ├── DateOnly { date: DateFmt }
-│   └── DateTime { date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone> }
-└── Unix(UnixFormat { precision: UnixPrecision })
+├── Date { date: DateFmt }
+├── DateTime { date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>, spaced_tz: bool }
+└── Unix { precision: UnixPrecision }
 
 Components:
-  DateFmt:       Iso | SlashUS | SlashEU | Compact
+  DateFmt:       Iso | SlashUS | SlashEU | SlashUSShort | SlashEUShort
+                 | DotEU | DotEUShort | Compact
+                 | MonthUS | MonthUSShort | MonthEU | MonthEUShort | Rfc2822
   Separator:     T | Space
-  TimeFmt:       Hms | HmsFrac | HmsCompact
-  Timezone:      Utc | Offset | OffsetCompact
+  TimeFmt:       Hms | HmsFrac | HmsCompact | Hms12 | Hms12Compact
+  Timezone:      Utc | Offset | OffsetCompact  (+ optional space before tz)
   UnixPrecision: Seconds | Milliseconds | Microseconds | Nanoseconds
 ```
 
-All possible combinations (4 dates × 2 seps × 3 times × 4 tz options = 96 DateTime + 4 DateOnly + 4 Unix = 104 total) are generated automatically. Validators reject impossible combinations (e.g., slash dates with `T` separator, space-separated with timezone). 
-The CSP eliminates these invalid formats on the first value anyway, so the performance cost is negligible.
+All structurally valid combinations are generated automatically. Invalid combinations (e.g.,
+slash dates with `T` separator, RFC 2822 with space timezone) are eliminated by the parser
+on the first value, so the performance cost is negligible.
 
 Adding a new timezone format (e.g., named timezones) requires adding one `Timezone` variant and updating the validator, instead of duplicating across all datetime combinations.
 
@@ -97,7 +111,36 @@ pip install maturin
 maturin develop --release
 ```
 
+For development (uses [uv](https://github.com/astral-sh/uv) for reproducible installs):
+
+```sh
+uv sync --all-extras
+maturin develop --release
+uv run pytest python/tests/
+```
+
 ## Usage
+
+### Quick start
+
+```python
+import polars as pl
+import infer_ts
+
+df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
+
+# One-liner: infer format and cast to Datetime in a single call
+series = infer_ts.to_datetime(df["ts"])
+
+# Or as a Polars expression (works inside lazy frames too)
+df = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+# Control the output time unit (default: "us")
+df = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+
+# Infer the format string only (returns a length-1 String Series)
+fmt_expr = pl.col("ts").infer_ts.infer_format()
+```
 
 ### Basic inference
 
