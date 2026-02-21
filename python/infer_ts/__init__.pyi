@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal
 
 import polars as pl
 
@@ -14,16 +15,15 @@ def infer_format(
 def to_datetime(
     series: pl.Series,
     *,
-    format: str | None = None,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
 ) -> pl.Series: ...
 def to_datetime_expr(
     expr: pl.Expr,
     *,
-    format: str | None = None,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
+    time_unit: Literal["ns", "us", "ms"] = "us",
 ) -> pl.Expr: ...
 def infer_format_expr(
     expr: pl.Expr,

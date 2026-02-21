@@ -137,6 +137,56 @@ class TestInferFormat:
         assert result["ts"][0] == "%Y-%m-%d"
 
 
+# ─── time_unit parameter ────────────────────────────────────────────────────
+
+
+class TestTimeUnit:
+    """to_datetime(time_unit=...) produces the correct Datetime dtype."""
+
+    def test_default_is_us(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+        assert result["ts"].dtype == pl.Datetime("us")
+
+    def test_ms(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ms"))
+        assert result["ts"].dtype == pl.Datetime("ms")
+        v = _dt(result["ts"], 0)
+        assert (v.year, v.month, v.day) == (2024, 1, 15)
+        assert (v.hour, v.minute, v.second) == (10, 30, 0)
+
+    def test_ns(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+        assert result["ts"].dtype == pl.Datetime("ns")
+        v = _dt(result["ts"], 0)
+        assert (v.year, v.month, v.day) == (2024, 1, 15)
+
+    def test_us_explicit(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="us"))
+        assert result["ts"].dtype == pl.Datetime("us")
+
+    def test_invalid_time_unit(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
+        with pytest.raises(ValueError, match="time_unit must be"):
+            df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="s"))
+
+    def test_unix_seconds_ms(self):
+        df = pl.DataFrame({"ts": ["1705312200", "1705398600"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ms"))
+        assert result["ts"].dtype == pl.Datetime("ms")
+        assert _dt(result["ts"], 0).year == 2024
+
+    def test_functional_time_unit_ns(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
+        result = df.with_columns(
+            infer_ts.to_datetime_expr(pl.col("ts"), time_unit="ns")
+        )
+        assert result["ts"].dtype == pl.Datetime("ns")
+
+
 # ─── Error handling ──────────────────────────────────────────────────────────
 
 

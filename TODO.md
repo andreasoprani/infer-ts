@@ -20,7 +20,7 @@ later sections depend on earlier ones being solid.
   - ~~Consider returning `InferResult` struct with: formats, confidence score, error details~~
   - Compositional format architecture now in place; extending formats is straightforward
 - [x] Speed up execution to try to match native polars casting performance
-- [ ] Allow the user to define the datetime time_unit they want (ns, us or ms)
+- [x] Allow the user to define the datetime time_unit they want (ns, us or ms)
 - [x] Remove `format` from to_datetime kwargs, it's pretty useless, if one already knows the format they can use native casting.
 
 ## v0.7 - Distribution

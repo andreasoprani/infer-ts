@@ -24,27 +24,60 @@ struct InferFormatKwargs {
     exhaustive: bool,
 }
 
-// ─── to_datetime_expr ───────────────────────────────────────────────────────
+// ─── output type funcs ──────────────────────────────────────────────────────
 
-fn to_datetime_output(_: &[Field]) -> PolarsResult<Field> {
+fn to_datetime_output_us(_: &[Field]) -> PolarsResult<Field> {
     Ok(Field::new(
         PlSmallStr::from_static("datetime"),
         DataType::Datetime(TimeUnit::Microseconds, None),
     ))
 }
 
-#[polars_expr(output_type_func=to_datetime_output)]
-fn to_datetime_expr(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult<Series> {
+fn to_datetime_output_ms(_: &[Field]) -> PolarsResult<Field> {
+    Ok(Field::new(
+        PlSmallStr::from_static("datetime"),
+        DataType::Datetime(TimeUnit::Milliseconds, None),
+    ))
+}
+
+fn to_datetime_output_ns(_: &[Field]) -> PolarsResult<Field> {
+    Ok(Field::new(
+        PlSmallStr::from_static("datetime"),
+        DataType::Datetime(TimeUnit::Nanoseconds, None),
+    ))
+}
+
+// ─── to_datetime_expr_{us,ms,ns} ────────────────────────────────────────────
+
+#[polars_expr(output_type_func=to_datetime_output_us)]
+fn to_datetime_expr_us(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult<Series> {
+    to_datetime_impl(inputs, kwargs, TimeUnit::Microseconds)
+}
+
+#[polars_expr(output_type_func=to_datetime_output_ms)]
+fn to_datetime_expr_ms(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult<Series> {
+    to_datetime_impl(inputs, kwargs, TimeUnit::Milliseconds)
+}
+
+#[polars_expr(output_type_func=to_datetime_output_ns)]
+fn to_datetime_expr_ns(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult<Series> {
+    to_datetime_impl(inputs, kwargs, TimeUnit::Nanoseconds)
+}
+
+fn to_datetime_impl(
+    inputs: &[Series],
+    kwargs: ToDatetimeKwargs,
+    time_unit: TimeUnit,
+) -> PolarsResult<Series> {
     let series = &inputs[0];
     let ca = series.str()?;
     let name = series.name();
 
-    // Infer then delegate to Polars as_datetime with cache.
     let formats = inference::infer(ca, kwargs.exhaustive);
 
     if formats.is_empty() {
         return Series::new_null(name.clone(), ca.len())
-            .cast(&DataType::Datetime(TimeUnit::Microseconds, None));
+            .cast(&DataType::Datetime(time_unit, None));
     }
 
     if formats.len() > 1 && kwargs.raise_on_multiple {
@@ -59,7 +92,7 @@ fn to_datetime_expr(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult
     let fmt = formats[0];
 
     if let Format::Unix(uf) = fmt {
-        return unix_to_datetime(ca, uf.precision, name);
+        return unix_to_datetime(ca, uf.precision, time_unit, name);
     }
 
     let polars_fmt = fmt.polars_format();
@@ -67,7 +100,7 @@ fn to_datetime_expr(inputs: &[Series], kwargs: ToDatetimeKwargs) -> PolarsResult
         StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
     let parsed = ca.as_datetime(
         Some(&polars_fmt),
-        TimeUnit::Microseconds,
+        time_unit,
         true,  // use_cache — key to matching native performance
         false, // tz_aware
         None,  // tz
@@ -100,40 +133,46 @@ fn infer_format_expr(inputs: &[Series], kwargs: InferFormatKwargs) -> PolarsResu
 fn unix_to_datetime(
     ca: &StringChunked,
     precision: UnixPrecision,
+    target: TimeUnit,
     name: &PlSmallStr,
 ) -> PolarsResult<Series> {
-    let (time_unit, multiplier): (TimeUnit, i64) = match precision {
-        UnixPrecision::Seconds => (TimeUnit::Milliseconds, 1_000),
-        UnixPrecision::Milliseconds => (TimeUnit::Milliseconds, 1),
-        UnixPrecision::Microseconds => (TimeUnit::Microseconds, 1),
-        UnixPrecision::Nanoseconds => (TimeUnit::Nanoseconds, 1),
-    };
-
     let int_ca: Int64Chunked = ca
         .into_iter()
         .map(|opt| {
-            opt.and_then(|s| {
-                let trimmed = s.trim();
-                trimmed.parse::<i64>().ok()
-            })
+            opt.and_then(|s| s.trim().parse::<i64>().ok())
         })
         .collect_trusted();
 
-    let scaled = if multiplier != 1 {
-        int_ca * multiplier
-    } else {
-        int_ca
-    };
+    let scaled = scale_unix(int_ca, precision, target);
 
-    let dt = scaled
-        .into_datetime(time_unit, None)
+    Ok(scaled
+        .into_datetime(target, None)
         .into_series()
-        .with_name(name.clone());
+        .with_name(name.clone()))
+}
 
-    // If target is microseconds, cast; otherwise keep native unit
-    if time_unit != TimeUnit::Microseconds {
-        dt.cast(&DataType::Datetime(TimeUnit::Microseconds, None))
+/// Scale a unix integer series from `from` precision to `target` time unit.
+///
+/// Both are expressed as powers of 10 relative to seconds, so the conversion
+/// is a single integer multiply or divide — no intermediate cast needed.
+fn scale_unix(ca: Int64Chunked, from: UnixPrecision, target: TimeUnit) -> Int64Chunked {
+    let from_exp: i32 = match from {
+        UnixPrecision::Seconds => 0,
+        UnixPrecision::Milliseconds => 3,
+        UnixPrecision::Microseconds => 6,
+        UnixPrecision::Nanoseconds => 9,
+    };
+    let target_exp: i32 = match target {
+        TimeUnit::Milliseconds => 3,
+        TimeUnit::Microseconds => 6,
+        TimeUnit::Nanoseconds => 9,
+    };
+    let diff = target_exp - from_exp;
+    if diff == 0 {
+        ca
+    } else if diff > 0 {
+        ca * 10i64.pow(diff as u32)
     } else {
-        Ok(dt)
+        ca / 10i64.pow((-diff) as u32)
     }
 }
