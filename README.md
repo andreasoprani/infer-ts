@@ -26,41 +26,64 @@ data) and flexible (use `exhaustive=True` to validate the _entire_ column).
 
 ## Supported formats
 
-| Family                       | Example                            | Polars format string      |
-| ---------------------------- | ---------------------------------- | ------------------------- |
-| ISO 8601 datetime            | `2024-01-15T10:30:00`              | `%Y-%m-%dT%H:%M:%S`       |
-| ISO 8601 + UTC               | `2024-01-15T10:30:00Z`             | `%Y-%m-%dT%H:%M:%SZ`      |
-| ISO 8601 + offset            | `2024-01-15T10:30:00+05:30`        | `%Y-%m-%dT%H:%M:%S%:z`    |
-| ISO 8601 + compact offset    | `2024-01-15T10:30:00+0530`         | `%Y-%m-%dT%H:%M:%S%z`     |
-| ISO 8601 + frac              | `2024-01-15T10:30:00.123456`       | `%Y-%m-%dT%H:%M:%S%.f`    |
-| ISO 8601 + frac + UTC        | `2024-01-15T10:30:00.123456Z`      | `%Y-%m-%dT%H:%M:%S%.fZ`   |
-| ISO 8601 + frac + offset     | `2024-01-15T10:30:00.123456+05:30` | `%Y-%m-%dT%H:%M:%S%.f%:z` |
-| ISO 8601 + frac + compact tz | `2024-01-15T10:30:00.123456+0530`  | `%Y-%m-%dT%H:%M:%S%.f%z`  |
-| Space datetime               | `2024-01-15 10:30:00`              | `%Y-%m-%d %H:%M:%S`       |
-| Space datetime + UTC         | `2024-01-15 10:30:00Z`             | `%Y-%m-%d %H:%M:%SZ`      |
-| Space datetime + offset      | `2024-01-15 10:30:00+05:30`        | `%Y-%m-%d %H:%M:%S%:z`    |
-| Space datetime + frac        | `2024-01-15 10:30:00.123456`       | `%Y-%m-%d %H:%M:%S%.f`    |
-| Date only (ISO)              | `2024-01-15`                       | `%Y-%m-%d`                |
-| US slash date                | `01/15/2024`                       | `%m/%d/%Y`                |
-| EU slash date                | `15/01/2024`                       | `%d/%m/%Y`                |
-| US slash date (2-digit year) | `01/15/24`                         | `%m/%d/%y`                |
-| EU slash date (2-digit year) | `15/01/24`                         | `%d/%m/%y`                |
-| US slash datetime            | `01/15/2024 10:30:00`              | `%m/%d/%Y %H:%M:%S`       |
-| EU slash datetime            | `15/01/2024 10:30:00`              | `%d/%m/%Y %H:%M:%S`       |
-| Dot-separated date           | `15.01.2024`                       | `%d.%m.%Y`                |
-| Dot-separated datetime       | `15.01.2024 10:30:00`              | `%d.%m.%Y %H:%M:%S`       |
-| Month-name US                | `Jan 15, 2024`                     | `%b %d, %Y`               |
-| Month-name EU                | `15 Jan 2024`                      | `%d %b %Y`                |
-| Month-name US datetime       | `Jan 15, 2024 10:30:00`            | `%b %d, %Y %H:%M:%S`      |
-| Month-name EU datetime       | `15 Jan 2024 10:30:00`             | `%d %b %Y %H:%M:%S`       |
-| 12-hour AM/PM                | `2024-01-15 10:30:00 PM`           | `%Y-%m-%d %I:%M:%S %p`    |
-| RFC 2822                     | `Tue, 15 Jan 2024 10:30:00 +0000`  | `%a, %d %b %Y %H:%M:%S%z` |
-| Compact date                 | `20240115`                         | `%Y%m%d`                  |
-| Compact datetime             | `20240115T103000`                  | `%Y%m%dT%H%M%S`           |
-| Unix seconds                 | `1705312200`                       | `@unix_seconds`           |
-| Unix milliseconds            | `1705312200000`                    | `@unix_ms`                |
-| Unix microseconds            | `1705312200000000`                 | `@unix_us`                |
-| Unix nanoseconds             | `1705312200000000000`              | `@unix_ns`                |
+Datetime formats are detected **compositionally**: a date pattern, a separator (`T` or
+space), a time pattern, and an optional timezone suffix are each matched independently.
+Any valid combination is recognised automatically. Date-only values (no time component)
+are also detected for all date patterns.
+
+### Date patterns
+
+| Name | Example | Polars fragment |
+| ---- | ------- | --------------- |
+| ISO 8601 | `2024-01-15` | `%Y-%m-%d` |
+| US slash, 4-digit year | `01/15/2024` | `%m/%d/%Y` |
+| US slash, 2-digit year | `01/15/24` | `%m/%d/%y` |
+| EU slash, 4-digit year | `15/01/2024` | `%d/%m/%Y` |
+| EU slash, 2-digit year | `15/01/24` | `%d/%m/%y` |
+| EU dot, 4-digit year | `15.01.2024` | `%d.%m.%Y` |
+| EU dot, 2-digit year | `15.01.24` | `%d.%m.%y` |
+| Compact | `20240115` | `%Y%m%d` |
+| Month-name US, 4-digit year | `Jan 15, 2024` | `%b %d, %Y` |
+| Month-name US, 2-digit year | `Jan 15, 24` | `%b %d, %y` |
+| Month-name EU, 4-digit year | `15 Jan 2024` | `%d %b %Y` |
+| Month-name EU, 2-digit year | `15 Jan 24` | `%d %b %y` |
+| RFC 2822 | `Tue, 15 Jan 2024` | `%a, %d %b %Y` |
+
+2-digit years are expanded using the POSIX convention: 00–68 → 2000–2068, 69–99 → 1969–1999.
+
+### Time patterns
+
+| Name | Example | Polars fragment |
+| ---- | ------- | --------------- |
+| 24-hour | `10:30:00` | `%H:%M:%S` |
+| 24-hour + fractional seconds | `10:30:00.123456` | `%H:%M:%S%.f` |
+| 24-hour compact | `103000` | `%H%M%S` |
+| 12-hour AM/PM | `10:30:00 PM` | `%I:%M:%S %p` |
+| 12-hour AM/PM compact | `10:30:00PM` | `%I:%M:%S%p` |
+
+Date and time are joined by `T` (ISO 8601 style) or a single space.
+
+### Timezone suffixes (optional)
+
+| Name | Example | Polars fragment |
+| ---- | ------- | --------------- |
+| UTC | `Z` | `Z` |
+| Offset with colon | `+05:30` | `%:z` |
+| Compact offset | `+0530` | `%z` |
+
+A space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).
+
+### Unix epoch formats
+
+| Name | Example | Marker |
+| ---- | ------- | ------ |
+| Unix seconds | `1705312200` | `@unix_seconds` |
+| Unix milliseconds | `1705312200000` | `@unix_ms` |
+| Unix microseconds | `1705312200000000` | `@unix_us` |
+| Unix nanoseconds | `1705312200000000000` | `@unix_ns` |
+
+`infer_format` returns a `@`-prefixed marker for epoch columns; see
+[Polars – Unix epoch formats](#polars--unix-epoch-formats) below for how to apply them.
 
 ### Unix epoch digit-count ranges
 
@@ -77,29 +100,21 @@ Values with 1–8 digits do not match any Unix variant; 8-digit numeric strings 
 
 ### Architecture: Compositional format design
 
-Internally, formats are represented using a compositional structure rather than a flat enum. This makes adding new format variants much easier:
+Internally, formats are represented using a compositional structure rather than a flat enum:
 
 ```
 Format
 ├── Date { date: DateFmt }
 ├── DateTime { date: DateFmt, sep: Separator, time: TimeFmt, tz: Option<Timezone>, spaced_tz: bool }
 └── Unix { precision: UnixPrecision }
-
-Components:
-  DateFmt:       Iso | SlashUS | SlashEU | SlashUSShort | SlashEUShort
-                 | DotEU | DotEUShort | Compact
-                 | MonthUS | MonthUSShort | MonthEU | MonthEUShort | Rfc2822
-  Separator:     T | Space
-  TimeFmt:       Hms | HmsFrac | HmsCompact | Hms12 | Hms12Compact
-  Timezone:      Utc | Offset | OffsetCompact  (+ optional space before tz)
-  UnixPrecision: Seconds | Milliseconds | Microseconds | Nanoseconds
 ```
 
-All structurally valid combinations are generated automatically. Invalid combinations (e.g.,
-slash dates with `T` separator, RFC 2822 with space timezone) are eliminated by the parser
-on the first value, so the performance cost is negligible.
+All combinations of the above components are tried automatically. Structurally invalid
+ones (e.g. a value whose first character isn't `T` or space at the separator position)
+are eliminated by the parser on the first value, so the performance cost is negligible.
 
-Adding a new timezone format (e.g., named timezones) requires adding one `Timezone` variant and updating the validator, instead of duplicating across all datetime combinations.
+Adding a new format variant (e.g. named timezones) requires a single new enum variant and
+a validator — no changes to the combinatorial logic.
 
 ## Installation
 
