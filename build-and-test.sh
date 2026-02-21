@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+echo "==> Running Rust tests..."
+cargo test
+
+echo ""
 echo "==> Rebuilding Python package..."
 uv sync --reinstall-package infer-ts --all-extras
 

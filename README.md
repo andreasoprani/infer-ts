@@ -171,7 +171,7 @@ For development (uses [uv](https://github.com/astral-sh/uv) for reproducible ins
 ```sh
 uv sync --all-extras
 maturin develop --release
-uv run pytest python/tests/
+bash build-and-test.sh
 ```
 
 ## Usage
