@@ -13,9 +13,9 @@
 
 ## Bug fixes / API consistency
 
-- [ ] Use `env!("CARGO_PKG_VERSION")` in `src/lib.rs` instead of hardcoded `"0.1.0"` to keep `__version__` in sync with `Cargo.toml`
-- [ ] Add `time_unit` parameter to `infer_ts.to_datetime()` (series-level API) — currently only the Polars plugin exposes this
-- [ ] Mark `exhaustive` as keyword-only (`*` separator) in `python/infer_ts/_infer_ts.pyi` stubs
+- [x] Use `env!("CARGO_PKG_VERSION")` in `src/lib.rs` instead of hardcoded `"0.1.0"` to keep `__version__` in sync with `Cargo.toml`
+- [x] Add `time_unit` parameter to `infer_ts.to_datetime()` (series-level API) — currently only the Polars plugin exposes this
+- [x] Mark `exhaustive` as keyword-only (`*` separator) in `python/infer_ts/_infer_ts.pyi` stubs
 
 ## Performance
 

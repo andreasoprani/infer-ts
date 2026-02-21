@@ -29,13 +29,15 @@ __all__ = [
     "to_datetime_expr",
 ]
 
-# Mapping from @unix_* marker → (Polars time_unit, multiplier to reach that unit)
-_EPOCH_UNITS: dict[str, tuple[Literal["ms", "us", "ns"], int]] = {
-    "@unix_seconds": ("ms", 1000),
-    "@unix_ms": ("ms", 1),
-    "@unix_us": ("us", 1),
-    "@unix_ns": ("ns", 1),
+# Source precision exponent (power of 10 relative to seconds) for each unix marker.
+_UNIX_SOURCE_EXP: dict[str, int] = {
+    "@unix_seconds": 0,
+    "@unix_ms": 3,
+    "@unix_us": 6,
+    "@unix_ns": 9,
 }
+
+_TIME_UNIT_EXP: dict[str, int] = {"ms": 3, "us": 6, "ns": 9}
 
 
 def infer_format(
@@ -64,6 +66,7 @@ def to_datetime(
     *,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
+    time_unit: Literal["ns", "us", "ms"] = "us",
 ) -> pl.Series:
     """Infer timestamp format and cast a string Series to Datetime.
 
@@ -72,6 +75,8 @@ def to_datetime(
         exhaustive: If *True*, check all values during inference.
         raise_on_multiple: If *True* (default), raise :class:`ValueError`
             when multiple formats match.  If *False*, use the first match.
+        time_unit: Output datetime time unit — ``"ns"``, ``"us"``, or ``"ms"``.
+            Defaults to ``"us"`` (microseconds).
 
     Returns:
         A Polars Series with Datetime (or Date) dtype.
@@ -86,7 +91,7 @@ def to_datetime(
     if not fmts:
         # All-null/empty series: return an all-null Datetime series
         if series.null_count() == len(series):
-            return series.cast(pl.Datetime)
+            return series.cast(pl.Datetime(time_unit))
         raise ValueError("No timestamp format matches the values in the series")
 
     if len(fmts) > 1 and raise_on_multiple:
@@ -96,8 +101,10 @@ def to_datetime(
         )
 
     fmt = fmts[0]
-    if fmt in _EPOCH_UNITS:
-        unit, multiplier = _EPOCH_UNITS[fmt]
-        return (series.cast(pl.Int64) * multiplier).cast(pl.Datetime(unit))
+    if fmt in _UNIX_SOURCE_EXP:
+        diff = _TIME_UNIT_EXP[time_unit] - _UNIX_SOURCE_EXP[fmt]
+        ints = series.cast(pl.Int64)
+        scaled = ints * 10**diff if diff >= 0 else ints // 10**-diff
+        return scaled.cast(pl.Datetime(time_unit))
 
-    return series.str.to_datetime(format=fmt)
+    return series.str.to_datetime(format=fmt, time_unit=time_unit)

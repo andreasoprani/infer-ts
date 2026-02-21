@@ -186,6 +186,42 @@ class TestErrors:
         assert result["ts"].null_count() == 3
 
 
+# ─── infer_ts.to_datetime() series API ──────────────────────────────────────
+
+
+class TestSeriesAPI:
+    """infer_ts.to_datetime() series-level API."""
+
+    def test_time_unit_us(self):
+        s = pl.Series(["2024-01-15T10:30:00", "2024-06-20T08:00:00"])
+        result = infer_ts.to_datetime(s, time_unit="us")
+        assert result.dtype == pl.Datetime("us")
+        assert result[0].year == 2024  # type: ignore[union-attr]
+
+    def test_time_unit_ns(self):
+        s = pl.Series(["2024-01-15T10:30:00", "2024-06-20T08:00:00"])
+        result = infer_ts.to_datetime(s, time_unit="ns")
+        assert result.dtype == pl.Datetime("ns")
+
+    def test_time_unit_ms(self):
+        s = pl.Series(["2024-01-15T10:30:00"])
+        result = infer_ts.to_datetime(s, time_unit="ms")
+        assert result.dtype == pl.Datetime("ms")
+
+    def test_unix_seconds_time_unit_ns(self):
+        s = pl.Series(["1705312200", "1705398600"])
+        result = infer_ts.to_datetime(s, time_unit="ns")
+        assert result.dtype == pl.Datetime("ns")
+        assert result[0].year == 2024  # type: ignore[union-attr]
+
+    def test_unix_ns_time_unit_ms(self):
+        # nanoseconds down-scaled to ms
+        s = pl.Series(["1705312200000000000"])
+        result = infer_ts.to_datetime(s, time_unit="ms")
+        assert result.dtype == pl.Datetime("ms")
+        assert result[0].year == 2024  # type: ignore[union-attr]
+
+
 # ─── Functional style ───────────────────────────────────────────────────────
 
 

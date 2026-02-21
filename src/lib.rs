@@ -113,6 +113,6 @@ fn _infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(infer_format, m)?)?;
     m.add_function(wrap_pyfunction!(infer_format_series, m)?)?;
     m.add_function(wrap_pyfunction!(infer_format_iter, m)?)?;
-    m.add("__version__", "0.1.0")?;
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

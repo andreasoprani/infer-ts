@@ -17,6 +17,7 @@ def to_datetime(
     *,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
+    time_unit: Literal["ns", "us", "ms"] = "us",
 ) -> pl.Series: ...
 def to_datetime_expr(
     expr: pl.Expr,
