@@ -5,6 +5,7 @@
 ## Distribution
 
 - [x] Add `cargo test` to `test-python.sh` so Rust unit tests run alongside Python tests — renamed to `build-and-test.sh`
+- [x] CI pipeline: build and run tests — `.github/workflows/ci.yml`
 - [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
 
 ## Docs
