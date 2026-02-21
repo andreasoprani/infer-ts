@@ -20,12 +20,11 @@ if TYPE_CHECKING:
 
 import infer_ts.namespace  # noqa: F401  — registers the expr namespace
 
-from infer_ts.functions import infer_format_expr, to_datetime_expr
+from infer_ts.functions import to_datetime_expr
 
 __all__ = [
     "__version__",
     "infer_format",
-    "infer_format_expr",
     "to_datetime",
     "to_datetime_expr",
 ]

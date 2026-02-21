@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from infer_ts.functions import infer_format_expr, to_datetime_expr
+from infer_ts.functions import to_datetime_expr
 
 
 @pl.api.register_expr_namespace("infer_ts")
@@ -40,12 +40,3 @@ class ExprInferTsNamespace:
             time_unit=time_unit,
         )
 
-    def infer_format(self, *, exhaustive: bool = False) -> pl.Expr:
-        """Infer the timestamp format of a string column.
-
-        Returns a scalar String column containing the format string.
-
-        Args:
-            exhaustive: If *True*, check all values during inference.
-        """
-        return infer_format_expr(self._expr, exhaustive=exhaustive)

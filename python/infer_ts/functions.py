@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 PLUGIN_PATH = Path(__file__).parent
 
-__all__ = ["to_datetime_expr", "infer_format_expr"]
+__all__ = ["to_datetime_expr"]
 
 
 def to_datetime_expr(
@@ -56,26 +56,3 @@ def to_datetime_expr(
     )
 
 
-def infer_format_expr(
-    expr: pl.Expr,
-    *,
-    exhaustive: bool = False,
-) -> pl.Expr:
-    """Infer the timestamp format of a string column.
-
-    Returns a scalar String Series containing the inferred format string.
-
-    Args:
-        expr: A Polars expression producing a String column.
-        exhaustive: If *True*, check all values during inference.
-
-    Returns:
-        A Polars expression producing a String column with the format.
-    """
-    return register_plugin_function(
-        plugin_path=PLUGIN_PATH,
-        function_name="infer_format_expr",
-        args=[expr],
-        is_elementwise=False,
-        kwargs={"exhaustive": exhaustive},
-    )

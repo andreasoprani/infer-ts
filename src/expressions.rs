@@ -19,11 +19,6 @@ struct ToDatetimeKwargs {
     raise_on_multiple: bool,
 }
 
-#[derive(Deserialize)]
-struct InferFormatKwargs {
-    exhaustive: bool,
-}
-
 // ─── output type funcs ──────────────────────────────────────────────────────
 
 fn to_datetime_output_us(_: &[Field]) -> PolarsResult<Field> {
@@ -107,25 +102,6 @@ fn to_datetime_impl(
         &ambiguous,
     )?;
     Ok(parsed.into_series().with_name(name.clone()))
-}
-
-// ─── infer_format_expr ──────────────────────────────────────────────────────
-
-#[polars_expr(output_type=String)]
-fn infer_format_expr(inputs: &[Series], kwargs: InferFormatKwargs) -> PolarsResult<Series> {
-    let series = &inputs[0];
-    let ca = series.str()?;
-
-    let formats = inference::infer(ca, kwargs.exhaustive);
-
-    let result = if formats.is_empty() {
-        Series::new_null(series.name().clone(), 1).cast(&DataType::String)?
-    } else {
-        let fmt_str = formats[0].polars_format();
-        Series::new(series.name().clone(), &[fmt_str])
-    };
-
-    Ok(result)
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

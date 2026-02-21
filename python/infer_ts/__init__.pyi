@@ -25,8 +25,3 @@ def to_datetime_expr(
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
 ) -> pl.Expr: ...
-def infer_format_expr(
-    expr: pl.Expr,
-    *,
-    exhaustive: bool = False,
-) -> pl.Expr: ...

@@ -193,8 +193,8 @@ df = df.with_columns(pl.col("ts").infer_ts.to_datetime())
 # Control the output time unit (default: "us")
 df = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
 
-# Infer the format string only (returns a length-1 String Series)
-fmt_expr = pl.col("ts").infer_ts.infer_format()
+# Infer the format strings only (returns a list of all matching formats)
+fmts = infer_ts.infer_format(df["ts"])
 ```
 
 ### Basic inference

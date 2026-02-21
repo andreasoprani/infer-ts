@@ -110,33 +110,6 @@ class TestUnixEpoch:
         assert _dt(result["ts"], 0).year == 2024
 
 
-# ─── infer_format ────────────────────────────────────────────────────────────
-
-
-class TestInferFormat:
-    """pl.col("ts").infer_ts.infer_format() returning format strings."""
-
-    def test_iso_format(self):
-        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
-        result = df.select(pl.col("ts").infer_ts.infer_format())
-
-        assert result["ts"].dtype == pl.String
-        assert result["ts"][0] == "%Y-%m-%dT%H:%M:%S"
-
-    def test_unix_format(self):
-        df = pl.DataFrame({"ts": ["1705312200", "1705398600"]})
-        result = df.select(pl.col("ts").infer_ts.infer_format())
-
-        assert result["ts"].dtype == pl.String
-        assert result["ts"][0] == "@unix_seconds"
-
-    def test_date_only_format(self):
-        df = pl.DataFrame({"ts": ["2024-01-15", "2024-06-20"]})
-        result = df.select(pl.col("ts").infer_ts.infer_format())
-
-        assert result["ts"][0] == "%Y-%m-%d"
-
-
 # ─── time_unit parameter ────────────────────────────────────────────────────
 
 
@@ -217,7 +190,7 @@ class TestErrors:
 
 
 class TestFunctionalStyle:
-    """infer_ts.to_datetime_expr() and infer_ts.infer_format_expr()."""
+    """infer_ts.to_datetime_expr() functional style."""
 
     def test_to_datetime_expr(self):
         df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
@@ -226,12 +199,6 @@ class TestFunctionalStyle:
         assert result["ts"].dtype == pl.Datetime
         v = _dt(result["ts"], 0)
         assert (v.year, v.month, v.day) == (2024, 1, 15)
-
-    def test_infer_format_expr(self):
-        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
-        result = df.select(infer_ts.infer_format_expr(pl.col("ts")))
-
-        assert result["ts"][0] == "%Y-%m-%dT%H:%M:%S"
 
     def test_to_datetime_expr_lazy(self):
         df = pl.LazyFrame({"ts": ["2024-01-15T10:30:00"]})
