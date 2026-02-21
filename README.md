@@ -5,8 +5,48 @@ built in Rust via [PyO3](https://pyo3.rs/) for use with Python and
 [Polars](https://pola-rs.github.io/polars/).
 
 _Note_: This project is in development and not yet ready for use.
-It started as a vibe-coding experiment to learn Rust, PyO3, and Polars plugins.
+It was almost entirely *vibe-coded* as an experiment and a tool for personal use.
 Contributions are welcome if you spot any bugs or have suggestions for improvement.
+
+## Why this library?
+
+Polars can parse string columns to `Datetime` via `str.to_datetime(format=...)`, but
+requires you to supply the format string. When no format is given (`format=None`),
+Polars infers it — but with two significant limitations:
+
+**Only ISO 8601 variants are reliably inferred.** Common real-world formats fail
+entirely with `format=None`:
+
+```python
+pl.Series(["01/15/2024"]).str.to_datetime()
+# ComputeError: could not find an appropriate format to parse dates,
+# please define a format
+
+pl.Series(["1705312200"]).str.to_datetime()   # Unix timestamps
+pl.Series(["Jan 15, 2024"]).str.to_datetime() # Month-name dates
+pl.Series(["20240115T103000"]).str.to_datetime() # Compact dates
+# All raise the same error
+```
+
+**Format is inferred from the first non-null value only.** For slash dates, Polars
+always assumes day-first (`%d/%m/%Y`). If your data is US-formatted (`%m/%d/%Y`), you
+either get silently wrong dates or a parse error on the first value where `day > 12`:
+
+```python
+# Polars locks on %d/%m/%Y from the first row, then fails on month=15
+pl.Series(["03/04/2024", "01/15/2024"]).str.to_datetime()
+# ComputeError: … failed for 1 out of 2 values: ["01/15/2024"]
+```
+
+The alternative — wrapping `str.to_datetime` in a `try/except` loop over candidate
+formats — is verbose, slow, and still only tells you the first format that works on
+the first value.
+
+**infer-ts** solves this by scanning the entire column once with a CSP algorithm that
+tracks all compatible formats simultaneously. It returns every format consistent with
+the full column, handles ambiguity explicitly (e.g. reporting both `%d/%m/%Y` and
+`%m/%d/%Y` when the data doesn't distinguish them), and supports dozens of formats
+that Polars cannot auto-infer.
 
 ## How it works
 
