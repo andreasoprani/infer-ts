@@ -21,32 +21,6 @@ mod inference;
 #[global_allocator]
 static ALLOC: PolarsAllocator = PolarsAllocator::new();
 
-/// Infer timestamp format(s) from a Python list of strings.
-///
-/// Parses the first non-null value to seed candidate formats, then validates
-/// subsequent values against those candidates.
-///
-/// Args:
-///     values: A Python list of `str | None`.  `None` entries are skipped.
-///     exhaustive: If `True`, process all values and return all compatible formats.
-///                 If `False` (default), return as soon as only one format remains.
-///
-/// Returns:
-///     A list of Polars-compatible format strings, e.g. `["%Y-%m-%dT%H:%M:%S"]`.
-///     For Unix epoch columns the return values include special markers like
-///     `"@unix_seconds"`, `"@unix_ms"`, `"@unix_us"`, `"@unix_ns"`.
-///     See the README for how to apply these with Polars.
-#[pyfunction]
-#[pyo3(signature = (values, exhaustive=false))]
-fn infer_format(values: Vec<Option<String>>, exhaustive: bool) -> Vec<String> {
-    let refs: Vec<Option<&str>> = values.iter().map(|s| s.as_deref()).collect();
-    inference::infer(refs, exhaustive)
-        .into_formats()
-        .iter()
-        .map(|f| f.polars_format())
-        .collect()
-}
-
 /// Infer timestamp format(s) from a Polars Series (zero-copy).
 ///
 /// Accepts a Polars `Series` of strings directly, avoiding the Python list
@@ -109,7 +83,6 @@ fn infer_format_iter(iter: &Bound<'_, PyAny>, exhaustive: bool) -> PyResult<Vec<
 
 #[pymodule]
 fn _infer_ts(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(infer_format, m)?)?;
     m.add_function(wrap_pyfunction!(infer_format_series, m)?)?;
     m.add_function(wrap_pyfunction!(infer_format_iter, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

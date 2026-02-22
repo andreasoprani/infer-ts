@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Literal
 from collections.abc import Iterable
 
 from ._infer_ts import __version__
-from ._infer_ts import infer_format as _infer_format_list
 from ._infer_ts import infer_format_iter as _infer_format_iter
 from ._infer_ts import infer_format_series as _infer_format_series
 
@@ -56,8 +55,6 @@ def infer_format(
 
     if isinstance(values, pl.Series):
         return _infer_format_series(values, exhaustive=exhaustive)
-    if isinstance(values, list):
-        return _infer_format_list(values, exhaustive=exhaustive)
     return _infer_format_iter(iter(values), exhaustive=exhaustive)
 
 
