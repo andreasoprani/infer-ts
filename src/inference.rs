@@ -36,6 +36,30 @@ pub enum FeedResult {
     Done(Format),
 }
 
+/// Result of completing inference over a sequence of values.
+#[derive(Debug, PartialEq)]
+pub enum InferResult {
+    /// No non-null, non-whitespace values were seen — can't infer from empty data.
+    NoData,
+    /// Values were seen but no single format matched all of them.
+    NoMatch,
+    /// One or more formats survived (sorted for deterministic output).
+    Formats(Vec<Format>),
+}
+
+impl InferResult {
+    /// Extract the formats, returning an empty `Vec` for `NoData` and `NoMatch`.
+    ///
+    /// Useful for Python-facing functions that need a backward-compatible
+    /// `Vec<Format>` (both empty-column and no-match become an empty list).
+    pub fn into_formats(self) -> Vec<Format> {
+        match self {
+            Self::Formats(v) => v,
+            _ => vec![],
+        }
+    }
+}
+
 impl InferState {
     pub fn new(exhaustive: bool) -> Self {
         Self {
@@ -44,8 +68,19 @@ impl InferState {
         }
     }
 
-    /// Feed a single non-null, non-empty, already-trimmed value.
-    pub fn feed(&mut self, value: &str) -> FeedResult {
+    /// Feed a single value. `None` and whitespace-only values are skipped.
+    pub fn feed(&mut self, value: Option<&str>) -> FeedResult {
+        let value = match value {
+            Some(v) => {
+                let trimmed = v.trim();
+                if trimmed.is_empty() {
+                    return FeedResult::Continue;
+                }
+                trimmed
+            }
+            None => return FeedResult::Continue,
+        };
+
         match &mut self.candidates {
             None => {
                 self.candidates = Some(Format::parse(value).into_iter().collect());
@@ -68,14 +103,17 @@ impl InferState {
         FeedResult::Continue
     }
 
-    /// Finalise inference and return all surviving candidates (sorted).
-    pub fn finish(self) -> Vec<Format> {
-        let Some(candidates) = self.candidates else {
-            return vec![];
-        };
-        let mut result: Vec<Format> = candidates.into_iter().collect();
-        result.sort();
-        result
+    /// Finalise inference and return the result.
+    pub fn finish(self) -> InferResult {
+        match self.candidates {
+            None => InferResult::NoData,
+            Some(set) if set.is_empty() => InferResult::NoMatch,
+            Some(set) => {
+                let mut result: Vec<Format> = set.into_iter().collect();
+                result.sort();
+                InferResult::Formats(result)
+            }
+        }
     }
 }
 
@@ -93,32 +131,20 @@ impl InferState {
 ///   If `false`, return as soon as only one format remains (early exit).
 ///
 /// # Returns
-/// A `Vec<Format>` containing all formats compatible with the input values:
-/// - If `exhaustive=false` and early-exit triggered: single-element Vec
-/// - If `exhaustive=true` or no early exit: all surviving formats
-/// - If no non-null values were seen: empty Vec (can't infer from no data)
-/// - If no format matches all values: empty Vec
+/// An [`InferResult`] discriminating three outcomes:
+/// - `Formats(v)` — one or more formats survived (sorted)
+/// - `NoData` — no non-null values were seen; can't infer from empty data
+/// - `NoMatch` — values were seen but no format matched all of them
 pub fn infer<'a>(
     values: impl IntoIterator<Item = Option<&'a str>>,
     exhaustive: bool,
-) -> Vec<Format> {
+) -> InferResult {
     let mut state = InferState::new(exhaustive);
 
     for opt_value in values {
-        let value = match opt_value {
-            Some(v) => {
-                let trimmed = v.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                trimmed
-            }
-            None => continue,
-        };
-
-        match state.feed(value) {
-            FeedResult::NoMatch => return vec![],
-            FeedResult::Done(fmt) => return vec![fmt],
+        match state.feed(opt_value) {
+            FeedResult::NoMatch => return InferResult::NoMatch,
+            FeedResult::Done(fmt) => return InferResult::Formats(vec![fmt]),
             FeedResult::Continue => {}
         }
     }
@@ -182,7 +208,10 @@ mod tests {
 
     /// Assert inference result contains exactly these formats (order-independent).
     fn assert_infer(values: &[Option<&str>], exhaustive: bool, expected: &[Format]) {
-        let result = infer(values.iter().copied(), exhaustive);
+        let result = match infer(values.iter().copied(), exhaustive) {
+            InferResult::Formats(fmts) => fmts,
+            other => panic!("expected Formats(..), got {:?}", other),
+        };
         assert_eq!(
             result.len(),
             expected.len(),
@@ -450,29 +479,29 @@ mod tests {
     // ── Empty column handling ───────────────────────────────────────────────
 
     #[test]
-    fn all_nulls_returns_empty() {
+    fn all_nulls_returns_no_data() {
         let input: Vec<Option<&str>> = vec![None, None, None];
-        assert_eq!(infer(input.iter().copied(), false), vec![]);
+        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoData));
     }
 
     #[test]
-    fn empty_slice_returns_empty() {
+    fn empty_slice_returns_no_data() {
         let input: Vec<Option<&str>> = vec![];
-        assert_eq!(infer(input.iter().copied(), false), vec![]);
+        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoData));
     }
 
-    // ── No-match cases (return empty vec) ───────────────────────────────────
+    // ── No-match cases ──────────────────────────────────────────────────────
 
     #[test]
     fn incompatible_formats_no_match() {
         let input = vals(&["01/02/2024", "2024-01-15T10:30:00"]);
-        assert_eq!(infer(input.iter().copied(), false), vec![]);
+        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoMatch));
     }
 
     #[test]
     fn garbage_no_match() {
         let input = vals(&["not a timestamp at all"]);
-        assert_eq!(infer(input.iter().copied(), false), vec![]);
+        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoMatch));
     }
 
     // ── Multiple formats returned (ambiguous cases) ─────────────────────────
@@ -480,7 +509,7 @@ mod tests {
     #[test]
     fn ambiguous_slash_dates_returns_both() {
         let input = vals(&["01/02/2024", "03/04/2024", "05/06/2024"]);
-        let result = infer(input.iter().copied(), false);
+        let result = infer(input.iter().copied(), false).into_formats();
         assert!(result.contains(&date_only(SlashUS)));
         assert!(result.contains(&date_only(SlashEU)));
         assert_eq!(result.len(), 2);
@@ -489,7 +518,7 @@ mod tests {
     #[test]
     fn ambiguous_slash_datetimes_returns_both() {
         let input = vals(&["01/02/2024 10:00:00", "03/04/2024 11:00:00"]);
-        let result = infer(input.iter().copied(), false);
+        let result = infer(input.iter().copied(), false).into_formats();
         assert!(result.contains(&dt(SlashUS, Space, Hms, None)));
         assert!(result.contains(&dt(SlashEU, Space, Hms, None)));
         assert_eq!(result.len(), 2);
@@ -533,11 +562,11 @@ mod tests {
     fn exhaustive_mode_processes_all_values() {
         let input = vals(&["2024-01-15T10:30:00+05:30", "GARBAGE"]);
 
-        let non_exhaustive = infer(input.iter().copied(), false);
-        assert_eq!(non_exhaustive, vec![dt(Iso, T, Hms, Some(Offset))]);
+        // Non-exhaustive exits after the first value resolves to one format.
+        assert_infer(&input, false, &[dt(Iso, T, Hms, Some(Offset))]);
 
-        let exhaustive = infer(input.iter().copied(), true);
-        assert_eq!(exhaustive, vec![]);
+        // Exhaustive processes "GARBAGE" too, which eliminates all candidates.
+        assert!(matches!(infer(input.iter().copied(), true), InferResult::NoMatch));
     }
 
     #[test]
@@ -557,9 +586,9 @@ mod tests {
     }
 
     #[test]
-    fn exhaustive_empty_column_returns_empty() {
+    fn exhaustive_empty_column_returns_no_data() {
         let input: Vec<Option<&str>> = vec![None, None];
-        assert_eq!(infer(input.iter().copied(), true), vec![]);
+        assert!(matches!(infer(input.iter().copied(), true), InferResult::NoData));
     }
 
     // ── 12-hour AM/PM inference ──────────────────────────────────────────────

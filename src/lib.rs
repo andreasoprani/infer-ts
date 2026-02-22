@@ -11,8 +11,8 @@
 //! `@`-prefixed markers; see [`infer_format`] for details.
 
 use pyo3::prelude::*;
-use pyo3_polars::PySeries;
 use pyo3_polars::PolarsAllocator;
+use pyo3_polars::PySeries;
 
 mod expressions;
 mod formats;
@@ -40,8 +40,11 @@ static ALLOC: PolarsAllocator = PolarsAllocator::new();
 #[pyo3(signature = (values, exhaustive=false))]
 fn infer_format(values: Vec<Option<String>>, exhaustive: bool) -> Vec<String> {
     let refs: Vec<Option<&str>> = values.iter().map(|s| s.as_deref()).collect();
-    let formats = inference::infer(refs, exhaustive);
-    formats.iter().map(|f| f.polars_format()).collect()
+    inference::infer(refs, exhaustive)
+        .into_formats()
+        .iter()
+        .map(|f| f.polars_format())
+        .collect()
 }
 
 /// Infer timestamp format(s) from a Polars Series (zero-copy).
@@ -67,8 +70,11 @@ fn infer_format_series(series: PySeries, exhaustive: bool) -> PyResult<Vec<Strin
     let ca = series.str().map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!("expected a String Series: {e}"))
     })?;
-    let formats = inference::infer(ca, exhaustive);
-    Ok(formats.iter().map(|f| f.polars_format()).collect())
+    Ok(inference::infer(ca, exhaustive)
+        .into_formats()
+        .iter()
+        .map(|f| f.polars_format())
+        .collect())
 }
 
 /// Infer timestamp format(s) from any Python iterable of strings (streaming).
@@ -90,22 +96,15 @@ fn infer_format_iter(iter: &Bound<'_, PyAny>, exhaustive: bool) -> PyResult<Vec<
 
     for item in iter.try_iter()? {
         let item = item?;
-        if item.is_none() {
-            continue;
-        }
-        let s: String = item.extract()?;
-        let trimmed = s.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        match state.feed(trimmed) {
+        let opt_s: Option<String> = if item.is_none() { None } else { Some(item.extract()?) };
+        match state.feed(opt_s.as_deref()) {
             inference::FeedResult::NoMatch => return Ok(vec![]),
             inference::FeedResult::Done(fmt) => return Ok(vec![fmt.polars_format()]),
             inference::FeedResult::Continue => {}
         }
     }
 
-    Ok(state.finish().iter().map(|f| f.polars_format()).collect())
+    Ok(state.finish().into_formats().iter().map(|f| f.polars_format()).collect())
 }
 
 #[pymodule]

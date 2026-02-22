@@ -71,6 +71,25 @@ impl DateFmt {
             DateFmt::Rfc2822 => "%a, %d %b %Y",
         }
     }
+
+    /// Try to parse a date prefix from `s`, returning the remaining string on success.
+    pub(super) fn parse_date(self, s: &str) -> Option<&str> {
+        match self {
+            DateFmt::Iso => parse_iso_date(s).map(|(_, r)| r),
+            DateFmt::SlashUS => parse_slash_us_date(s).map(|(_, r)| r),
+            DateFmt::SlashEU => parse_slash_eu_date(s).map(|(_, r)| r),
+            DateFmt::SlashUSShort => parse_slash_us_short_date(s).map(|(_, r)| r),
+            DateFmt::SlashEUShort => parse_slash_eu_short_date(s).map(|(_, r)| r),
+            DateFmt::DotEU => parse_dot_eu_date(s).map(|(_, r)| r),
+            DateFmt::DotEUShort => parse_dot_eu_short_date(s).map(|(_, r)| r),
+            DateFmt::Compact => parse_compact_date(s).map(|(_, r)| r),
+            DateFmt::MonthUS => parse_month_us_date(s).map(|(_, r)| r),
+            DateFmt::MonthUSShort => parse_month_us_short_date(s).map(|(_, r)| r),
+            DateFmt::MonthEU => parse_month_eu_date(s).map(|(_, r)| r),
+            DateFmt::MonthEUShort => parse_month_eu_short_date(s).map(|(_, r)| r),
+            DateFmt::Rfc2822 => parse_rfc2822_date(s).map(|(_, r)| r),
+        }
+    }
 }
 
 // ─── DateFormat ─────────────────────────────────────────────────────────────
@@ -86,7 +105,7 @@ impl DateFormat {
     pub fn parse(value: &str) -> Vec<DateFormat> {
         let mut matches = Vec::new();
         for date_fmt in DateFmt::all() {
-            if let Some(remaining) = parse_date(value, *date_fmt) {
+            if let Some(remaining) = date_fmt.parse_date(value) {
                 if remaining.is_empty() {
                     matches.push(DateFormat { date: *date_fmt });
                 }
@@ -97,7 +116,7 @@ impl DateFormat {
 
     /// Validate a value against this specific date format.
     pub(super) fn validates(&self, value: &str) -> bool {
-        parse_date(value, self.date).is_some_and(|r| r.is_empty())
+        self.date.parse_date(value).is_some_and(|r| r.is_empty())
     }
 
     /// Polars-compatible format string.
@@ -108,15 +127,14 @@ impl DateFormat {
 
 // ─── Parsing Primitives ─────────────────────────────────────────────────────
 
-/// Validate and return a `NaiveDate` from a `YYYY-MM-DD` string (exactly 10 bytes).
-fn parse_iso_date(s: &str) -> Option<NaiveDate> {
-    if s.len() != 10 || s.as_bytes()[4] != b'-' || s.as_bytes()[7] != b'-' {
+fn parse_iso_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 10 || s.as_bytes()[4] != b'-' || s.as_bytes()[7] != b'-' {
         return None;
     }
     let year: i32 = s[0..4].parse().ok()?;
     let month: u32 = s[5..7].parse().ok()?;
     let day: u32 = s[8..10].parse().ok()?;
-    NaiveDate::from_ymd_opt(year, month, day)
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[10..]))
 }
 
 /// Parse slash date parts (AA/BB/CCCC) and return (a, b, year).
@@ -128,6 +146,18 @@ fn parse_slash_date_parts(s: &str) -> Option<(u32, u32, i32)> {
     let b: u32 = s[3..5].parse().ok()?;
     let year: i32 = s[6..10].parse().ok()?;
     Some((a, b, year))
+}
+
+fn parse_slash_us_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 10 { return None; }
+    let (a, b, year) = parse_slash_date_parts(&s[..10])?;
+    Some((NaiveDate::from_ymd_opt(year, a, b)?, &s[10..]))
+}
+
+fn parse_slash_eu_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 10 { return None; }
+    let (a, b, year) = parse_slash_date_parts(&s[..10])?;
+    Some((NaiveDate::from_ymd_opt(year, b, a)?, &s[10..]))
 }
 
 /// Expand a 2-digit year to 4-digit using POSIX convention: 00–68 → 2000–2068, 69–99 → 1969–1999.
@@ -150,6 +180,18 @@ fn parse_slash_date_parts_short(s: &str) -> Option<(u32, u32, i32)> {
     Some((a, b, expand_year(yy)))
 }
 
+fn parse_slash_us_short_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 8 { return None; }
+    let (a, b, year) = parse_slash_date_parts_short(&s[..8])?;
+    Some((NaiveDate::from_ymd_opt(year, a, b)?, &s[8..]))
+}
+
+fn parse_slash_eu_short_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 8 { return None; }
+    let (a, b, year) = parse_slash_date_parts_short(&s[..8])?;
+    Some((NaiveDate::from_ymd_opt(year, b, a)?, &s[8..]))
+}
+
 /// Parse dot date parts (DD.MM.YYYY) and return (day, month, year).
 fn parse_dot_date_parts(s: &str) -> Option<(u32, u32, i32)> {
     if s.len() != 10 || s.as_bytes()[2] != b'.' || s.as_bytes()[5] != b'.' {
@@ -159,6 +201,12 @@ fn parse_dot_date_parts(s: &str) -> Option<(u32, u32, i32)> {
     let month: u32 = s[3..5].parse().ok()?;
     let year: i32 = s[6..10].parse().ok()?;
     Some((day, month, year))
+}
+
+fn parse_dot_eu_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 10 { return None; }
+    let (day, month, year) = parse_dot_date_parts(&s[..10])?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[10..]))
 }
 
 /// Parse dot date parts (DD.MM.YY) for 2-digit year.
@@ -172,15 +220,20 @@ fn parse_dot_date_parts_short(s: &str) -> Option<(u32, u32, i32)> {
     Some((day, month, expand_year(yy)))
 }
 
-/// Validate compact date YYYYMMDD (exactly 8 ASCII digits).
-fn validate_compact_date(s: &str) -> bool {
-    if s.len() != 8 || !s.bytes().all(|b| b.is_ascii_digit()) {
-        return false;
+fn parse_dot_eu_short_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 8 { return None; }
+    let (day, month, year) = parse_dot_date_parts_short(&s[..8])?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[8..]))
+}
+
+fn parse_compact_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 8 || !s[..8].bytes().all(|b| b.is_ascii_digit()) {
+        return None;
     }
-    let year: i32 = s[0..4].parse().unwrap();
-    let month: u32 = s[4..6].parse().unwrap();
-    let day: u32 = s[6..8].parse().unwrap();
-    NaiveDate::from_ymd_opt(year, month, day).is_some()
+    let year: i32 = s[0..4].parse().ok()?;
+    let month: u32 = s[4..6].parse().ok()?;
+    let day: u32 = s[6..8].parse().ok()?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[8..]))
 }
 
 /// Parse a 3-character month abbreviation (case-insensitive) to a 1-based month number.
@@ -203,6 +256,38 @@ fn parse_month_abbr(s: &str) -> Option<u32> {
         "dec" => Some(12),
         _ => None,
     }
+}
+
+fn parse_month_us_date(s: &str) -> Option<(NaiveDate, &str)> {
+    let (day, month, year, consumed) = parse_month_us_date_parts(s)?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[consumed..]))
+}
+
+fn parse_month_us_short_date(s: &str) -> Option<(NaiveDate, &str)> {
+    let (day, month, year, consumed) = parse_month_us_date_parts_short(s)?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[consumed..]))
+}
+
+fn parse_month_eu_date(s: &str) -> Option<(NaiveDate, &str)> {
+    let (day, month, year, consumed) = parse_month_eu_date_parts(s)?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[consumed..]))
+}
+
+fn parse_month_eu_short_date(s: &str) -> Option<(NaiveDate, &str)> {
+    let (day, month, year, consumed) = parse_month_eu_date_parts_short(s)?;
+    Some((NaiveDate::from_ymd_opt(year, month, day)?, &s[consumed..]))
+}
+
+fn parse_rfc2822_date(s: &str) -> Option<(NaiveDate, &str)> {
+    if s.len() < 5 { return None; }
+    let dow = parse_dow_abbr(s)?;
+    if s.as_bytes()[3] != b',' || s.as_bytes()[4] != b' ' {
+        return None;
+    }
+    let (date, remaining) = parse_month_eu_date(&s[5..])?;
+    use chrono::Datelike;
+    if date.weekday() != dow { return None; }
+    Some((date, remaining))
 }
 
 /// Parse US month-name date `Jan DD, YYYY` and return (day, month, year, bytes_consumed).
@@ -339,109 +424,3 @@ fn parse_dow_abbr(s: &str) -> Option<chrono::Weekday> {
     }
 }
 
-/// Parse a date from the start of `s` for the given format.
-/// Returns the remaining (unconsumed) string on success.
-pub(super) fn parse_date(s: &str, fmt: DateFmt) -> Option<&str> {
-    match fmt {
-        DateFmt::Iso => {
-            if s.len() < 10 {
-                return None;
-            }
-            parse_iso_date(&s[..10])?;
-            Some(&s[10..])
-        }
-        DateFmt::SlashUS => {
-            if s.len() < 10 {
-                return None;
-            }
-            let (a, b, year) = parse_slash_date_parts(&s[..10])?;
-            NaiveDate::from_ymd_opt(year, a, b)?;
-            Some(&s[10..])
-        }
-        DateFmt::SlashEU => {
-            if s.len() < 10 {
-                return None;
-            }
-            let (a, b, year) = parse_slash_date_parts(&s[..10])?;
-            NaiveDate::from_ymd_opt(year, b, a)?;
-            Some(&s[10..])
-        }
-        DateFmt::SlashUSShort => {
-            if s.len() < 8 {
-                return None;
-            }
-            let (a, b, year) = parse_slash_date_parts_short(&s[..8])?;
-            NaiveDate::from_ymd_opt(year, a, b)?;
-            Some(&s[8..])
-        }
-        DateFmt::SlashEUShort => {
-            if s.len() < 8 {
-                return None;
-            }
-            let (a, b, year) = parse_slash_date_parts_short(&s[..8])?;
-            NaiveDate::from_ymd_opt(year, b, a)?;
-            Some(&s[8..])
-        }
-        DateFmt::DotEU => {
-            if s.len() < 10 {
-                return None;
-            }
-            let (day, month, year) = parse_dot_date_parts(&s[..10])?;
-            NaiveDate::from_ymd_opt(year, month, day)?;
-            Some(&s[10..])
-        }
-        DateFmt::DotEUShort => {
-            if s.len() < 8 {
-                return None;
-            }
-            let (day, month, year) = parse_dot_date_parts_short(&s[..8])?;
-            NaiveDate::from_ymd_opt(year, month, day)?;
-            Some(&s[8..])
-        }
-        DateFmt::Compact => {
-            if s.len() < 8 {
-                return None;
-            }
-            if !validate_compact_date(&s[..8]) {
-                return None;
-            }
-            Some(&s[8..])
-        }
-        DateFmt::MonthUS => {
-            let (day, month, year, consumed) = parse_month_us_date_parts(s)?;
-            NaiveDate::from_ymd_opt(year, month, day)?;
-            Some(&s[consumed..])
-        }
-        DateFmt::MonthUSShort => {
-            let (day, month, year, consumed) = parse_month_us_date_parts_short(s)?;
-            NaiveDate::from_ymd_opt(year, month, day)?;
-            Some(&s[consumed..])
-        }
-        DateFmt::MonthEU => {
-            let (day, month, year, consumed) = parse_month_eu_date_parts(s)?;
-            NaiveDate::from_ymd_opt(year, month, day)?;
-            Some(&s[consumed..])
-        }
-        DateFmt::MonthEUShort => {
-            let (day, month, year, consumed) = parse_month_eu_date_parts_short(s)?;
-            NaiveDate::from_ymd_opt(year, month, day)?;
-            Some(&s[consumed..])
-        }
-        DateFmt::Rfc2822 => {
-            if s.len() < 5 {
-                return None;
-            }
-            let dow = parse_dow_abbr(s)?;
-            if s.as_bytes()[3] != b',' || s.as_bytes()[4] != b' ' {
-                return None;
-            }
-            let (day, month, year, consumed) = parse_month_eu_date_parts(&s[5..])?;
-            let date = NaiveDate::from_ymd_opt(year, month, day)?;
-            use chrono::Datelike;
-            if date.weekday() != dow {
-                return None;
-            }
-            Some(&s[5 + consumed..])
-        }
-    }
-}

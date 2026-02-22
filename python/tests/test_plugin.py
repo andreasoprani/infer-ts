@@ -179,11 +179,51 @@ class TestErrors:
         assert result["ts"].dtype == pl.Datetime
 
     def test_all_null(self):
+        # NoData: no non-null values — should produce a null Datetime series,
+        # not raise an error.
         df = pl.DataFrame({"ts": [None, None, None]}, schema={"ts": pl.String})
         result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
 
         assert result["ts"].dtype == pl.Datetime
         assert result["ts"].null_count() == 3
+
+    def test_unrecognized_format_raises(self):
+        # NoMatch: non-null values are present but no format matches.
+        # Before this fix, to_datetime() silently returned a null series.
+        # After this fix, it raises a ComputeError.
+        df = pl.DataFrame({"ts": ["not a timestamp", "also not a timestamp"]})
+        with pytest.raises(pl.exceptions.ComputeError, match="no timestamp format matched"):
+            df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+    def test_mixed_null_and_unrecognized_raises(self):
+        # Non-null garbage mixed with nulls should still raise, not silently
+        # return nulls.
+        df = pl.DataFrame({"ts": [None, "garbage", None]}, schema={"ts": pl.String})
+        with pytest.raises(pl.exceptions.ComputeError, match="no timestamp format matched"):
+            df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+    def test_all_empty_strings(self):
+        # Empty strings are trimmed and skipped just like nulls (NoData),
+        # so the result is a null Datetime series, not an error.
+        df = pl.DataFrame({"ts": ["", "", ""]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+        assert result["ts"].dtype == pl.Datetime
+        assert result["ts"].null_count() == 3
+
+    def test_all_whitespace_strings(self):
+        # Whitespace-only strings are also trimmed to empty and skipped (NoData).
+        df = pl.DataFrame({"ts": ["   ", "\t", "\n"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+        assert result["ts"].dtype == pl.Datetime
+        assert result["ts"].null_count() == 3
+
+    def test_empty_strings_mixed_with_valid(self):
+        # Empty and whitespace-only strings are skipped; valid timestamps are parsed.
+        df = pl.DataFrame({"ts": ["", "2024-01-15T10:30:00", "   "]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+        assert result["ts"].dtype == pl.Datetime
+        assert result["ts"].null_count() == 2
+        assert _dt(result["ts"], 1).year == 2024
 
 
 # ─── infer_ts.to_datetime() series API ──────────────────────────────────────

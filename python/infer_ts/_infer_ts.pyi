@@ -1,6 +1,6 @@
 """Type stubs for the native Rust extension module."""
 
-from collections.abc import Iterator
+from collections.abc import Iterable
 
 import polars as pl
 
@@ -19,7 +19,7 @@ def infer_format_series(
 ) -> list[str]: ...
 
 def infer_format_iter(
-    iter: Iterator[str | None],
+    iter: Iterable[str | None],
     *,
     exhaustive: bool = False,
 ) -> list[str]: ...

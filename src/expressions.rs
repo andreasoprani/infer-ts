@@ -68,12 +68,20 @@ fn to_datetime_impl(
     let ca = series.str()?;
     let name = series.name();
 
-    let formats = inference::infer(ca, kwargs.exhaustive);
-
-    if formats.is_empty() {
-        return Series::new_null(name.clone(), ca.len())
-            .cast(&DataType::Datetime(time_unit, None));
-    }
+    let formats = match inference::infer(ca, kwargs.exhaustive) {
+        inference::InferResult::NoData => {
+            // All values are null — return a null Datetime series.
+            return Series::new_null(name.clone(), ca.len())
+                .cast(&DataType::Datetime(time_unit, None));
+        }
+        inference::InferResult::NoMatch => {
+            polars_bail!(ComputeError:
+                "no timestamp format matched the input values. \
+                 Ensure all non-null values share a single consistent format."
+            );
+        }
+        inference::InferResult::Formats(fmts) => fmts,
+    };
 
     if formats.len() > 1 && kwargs.raise_on_multiple {
         let fmt_strs: Vec<String> = formats.iter().map(|f| f.polars_format()).collect();
@@ -91,8 +99,7 @@ fn to_datetime_impl(
     }
 
     let polars_fmt = fmt.polars_format();
-    let ambiguous =
-        StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
+    let ambiguous = StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
     let parsed = ca.as_datetime(
         Some(&polars_fmt),
         time_unit,
@@ -114,9 +121,7 @@ fn unix_to_datetime(
 ) -> PolarsResult<Series> {
     let int_ca: Int64Chunked = ca
         .into_iter()
-        .map(|opt| {
-            opt.and_then(|s| s.trim().parse::<i64>().ok())
-        })
+        .map(|opt| opt.and_then(|s| s.trim().parse::<i64>().ok()))
         .collect_trusted();
 
     let scaled = scale_unix(int_ca, precision, target);

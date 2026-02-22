@@ -1,4 +1,4 @@
-use super::date::{parse_date, DateFmt};
+use super::date::DateFmt;
 use super::time::*;
 
 /// Time component of a datetime: separator + time format + optional timezone.
@@ -27,7 +27,7 @@ impl DateTimeFormat {
         let mut matches = Vec::new();
 
         for date_fmt in DateFmt::all() {
-            let Some(remaining) = parse_date(value, *date_fmt) else {
+            let Some(remaining) = date_fmt.parse_date(value) else {
                 continue;
             };
 
@@ -131,7 +131,7 @@ impl DateTimeFormat {
 
     /// Validate a value against this specific format using compositional parsing.
     pub(super) fn validates(&self, value: &str) -> bool {
-        let Some(after_date) = parse_date(value, self.date) else {
+        let Some(after_date) = self.date.parse_date(value) else {
             return false;
         };
         let Some(after_sep) = parse_separator(after_date, self.time.separator) else {

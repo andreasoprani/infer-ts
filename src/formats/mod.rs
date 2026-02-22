@@ -54,20 +54,10 @@ impl Format {
             return vec![];
         }
 
-        let mut matches: Vec<Format> = DateFormat::parse(value)
-            .into_iter()
-            .map(Format::Date)
-            .collect();
-
-        matches.extend(
-            DateTimeFormat::parse(value)
-                .into_iter()
-                .map(Format::DateTime),
-        );
-
-        matches.extend(UnixFormat::parse(value).into_iter().map(Format::Unix));
-
-        matches
+        DateFormat::parse(value).into_iter().map(Format::Date)
+            .chain(DateTimeFormat::parse(value).into_iter().map(Format::DateTime))
+            .chain(UnixFormat::parse(value).into_iter().map(Format::Unix))
+            .collect()
     }
 
     /// Polars-compatible format string for `Expr.str.to_datetime(format=...)`.
