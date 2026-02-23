@@ -262,6 +262,56 @@ class TestSeriesAPI:
         assert result[0].year == 2024  # type: ignore[union-attr]
 
 
+# ─── Unix overflow ───────────────────────────────────────────────────────────
+
+
+class TestUnixOverflow:
+    """Unix timestamp scaling: overflow values become null, not silently wrong dates.
+
+    i64 nanoseconds saturate at 9_223_372_036_854_775_807, corresponding to
+    9_223_372_036 Unix seconds (~year 2262). Scaling beyond this must not wrap.
+    """
+
+    def test_plugin_seconds_to_ns_overflow_is_null(self):
+        """Seconds too large to represent as ns → null, not a wrapped wrong date."""
+        # 9_999_999_999 * 1_000_000_000 > i64::MAX
+        df = pl.DataFrame({"ts": ["9999999999"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+        assert result["ts"].dtype == pl.Datetime("ns")
+        assert result["ts"][0] is None
+
+    def test_series_api_seconds_to_ns_overflow_is_null(self):
+        """Same overflow via infer_ts.to_datetime()."""
+        s = pl.Series(["9999999999"])
+        result = infer_ts.to_datetime(s, time_unit="ns")
+        assert result.dtype == pl.Datetime("ns")
+        assert result[0] is None
+
+    def test_plugin_seconds_to_ns_boundary_is_valid(self):
+        """Largest Unix second that fits in ns (9_223_372_036 ≈ year 2262) is valid."""
+        df = pl.DataFrame({"ts": ["9223372036"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+        assert result["ts"].dtype == pl.Datetime("ns")
+        assert result["ts"][0] is not None
+        assert _dt(result["ts"], 0).year == 2262
+
+    def test_plugin_seconds_past_boundary_is_null(self):
+        """One second past the ns boundary → null."""
+        df = pl.DataFrame({"ts": ["9223372037"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+        assert result["ts"].dtype == pl.Datetime("ns")
+        assert result["ts"][0] is None
+
+    def test_plugin_mixed_overflow_and_valid(self):
+        """Valid values are preserved alongside overflow values (which become null)."""
+        df = pl.DataFrame({"ts": ["1705312200", "9999999999"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+        assert result["ts"].dtype == pl.Datetime("ns")
+        assert result["ts"][0] is not None
+        assert _dt(result["ts"], 0).year == 2024
+        assert result["ts"][1] is None
+
+
 # ─── Functional style ───────────────────────────────────────────────────────
 
 

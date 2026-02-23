@@ -152,7 +152,10 @@ fn scale_unix(ca: Int64Chunked, from: UnixPrecision, target: TimeUnit) -> Int64C
     if diff == 0 {
         ca
     } else if diff > 0 {
-        ca * 10i64.pow(diff as u32)
+        let factor = 10i64.pow(diff as u32);
+        ca.into_iter()
+            .map(|opt| opt.and_then(|v| v.checked_mul(factor)))
+            .collect_trusted()
     } else {
         ca / 10i64.pow((-diff) as u32)
     }

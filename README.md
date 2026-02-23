@@ -169,28 +169,22 @@ df = df.with_columns(pl.col("ts").str.to_datetime(format=fmt))
 
 ### Polars – Unix epoch formats
 
-`infer_format` returns a `@`-prefixed marker for epoch columns. These require
-integer casting rather than format-string parsing:
+`infer_format` returns a `@`-prefixed marker for epoch columns (e.g. `@unix_seconds`,
+`@unix_ms`, `@unix_us`, `@unix_ns`). The `to_datetime` plugin and `to_datetime()`
+wrapper handle these automatically with correct integer scaling — no manual casting
+needed:
 
 ```python
 import polars as pl
 import infer_ts
 
-EPOCH_UNITS = {
-    "@unix_seconds": "us",   # cast seconds → microseconds for Datetime
-    "@unix_ms":      "us",
-    "@unix_us":      "us",
-    "@unix_ns":      "ns",
-}
-
 df = pl.DataFrame({"ts": ["1705312200", "1705398600"]})
-fmts = infer_ts.infer_format(df["ts"].to_list())
-fmt = fmts[0] if fmts else None
 
-if fmt in EPOCH_UNITS:
-    df = df.with_columns(
-        pl.col("ts").cast(pl.Int64).cast(pl.Datetime(EPOCH_UNITS[fmt]))
-    )
+# Plugin expression (works in lazy frames too):
+df = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+# Or via the series API:
+result = infer_ts.to_datetime(df["ts"])
 ```
 
 ## Handling ambiguity

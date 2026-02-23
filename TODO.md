@@ -9,8 +9,8 @@
 
 ## Critical bugs
 
-- [ ] Integer overflow in `scale_unix` (`src/expressions.rs:155-157`) — upscaling Unix seconds/ms/μs to nanoseconds multiplies `i64` without overflow checks; Rust release builds wrap silently, same issue in `python/infer_ts/__init__.py:104` via Polars `Int64` arithmetic
-- [ ] README epoch example is wrong (`README.md:190-193`) — shows `cast(pl.Int64).cast(pl.Datetime("us"))` for Unix seconds, which interprets raw seconds as microseconds, producing wildly wrong dates; correct approach requires scaling first (as `to_datetime()` does correctly)
+- [x] Integer overflow in `scale_unix` (`src/expressions.rs:155-157`) — upscaling Unix seconds/ms/μs to nanoseconds multiplies `i64` without overflow checks; Rust release builds wrap silently, same issue in `python/infer_ts/__init__.py:104` via Polars `Int64` arithmetic
+- [x] README epoch example is wrong (`README.md:190-193`) — shows `cast(pl.Int64).cast(pl.Datetime("us"))` for Unix seconds, which interprets raw seconds as microseconds, producing wildly wrong dates; correct approach requires scaling first (as `to_datetime()` does correctly)
 
 ## Bugs / correctness
 

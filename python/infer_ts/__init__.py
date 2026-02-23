@@ -101,7 +101,14 @@ def to_datetime(
     if fmt in _UNIX_SOURCE_EXP:
         diff = _TIME_UNIT_EXP[time_unit] - _UNIX_SOURCE_EXP[fmt]
         ints = series.cast(pl.Int64)
-        scaled = ints * 10**diff if diff >= 0 else ints // 10**-diff
+        if diff > 0:
+            factor = 10**diff
+            overflow = ints.abs() > (2**63 - 1) // factor
+            scaled = (ints * factor).set(overflow, None)
+        elif diff < 0:
+            scaled = ints // 10**-diff
+        else:
+            scaled = ints
         return scaled.cast(pl.Datetime(time_unit))
 
     return series.str.to_datetime(format=fmt, time_unit=time_unit)
