@@ -16,7 +16,7 @@ from ._infer_ts import infer_format_series as _infer_format_series
 if TYPE_CHECKING:
     import polars as pl
 
-import infer_ts.namespace  # noqa: F401  — registers the expr namespace
+import infer_ts.namespace  # noqa: F401  — registers the expr namespace  # pyright: ignore[reportUnusedImport]
 from infer_ts.functions import to_datetime_expr
 
 __all__ = [

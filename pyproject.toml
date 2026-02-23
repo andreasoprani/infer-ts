@@ -62,3 +62,9 @@ known-first-party = ["infer_ts"]
 [tool.pyright]
 extraPaths = ["python"]
 stubPath = "typings"
+reportAny = "none"
+reportExplicitAny = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportPrivateUsage = "none"
+reportUnusedCallResult = "none"

@@ -116,9 +116,9 @@ class TestToDatetimeRoundTrip:
         assert result.dtype == pl.Datetime
         assert len(result) == N
         # spot-check first and last
-        assert result[0].year == 2024  # pyright: ignore[reportOptionalMemberAccess]
-        assert result[0].month == 1  # pyright: ignore[reportOptionalMemberAccess]
-        assert result[-1].day == 15  # pyright: ignore[reportOptionalMemberAccess]
+        assert result[0].year == 2024
+        assert result[0].month == 1
+        assert result[-1].day == 15
 
     def test_round_trip_timing(self, series: pl.Series):
         elapsed, result = _time(lambda: infer_ts.to_datetime(series))
@@ -150,12 +150,12 @@ class TestLazyFrame:
     def test_map_batches_integration(self, lazy_frame: pl.LazyFrame):
         """map_batches pattern for lazy-compatible usage."""
         result = lazy_frame.with_columns(
-            pl.col("ts").map_batches(infer_ts.to_datetime, return_dtype=pl.Datetime).alias("parsed")
+            pl.col("ts").map_batches(infer_ts.to_datetime, return_dtype=pl.Datetime).alias("parsed")  # pyright: ignore[reportAttributeAccessIssue]
         ).collect()
 
         assert result["parsed"].dtype == pl.Datetime
         assert len(result) == 1000
-        assert result["parsed"][0].year == 2024  # pyright: ignore[reportOptionalMemberAccess]
+        assert result["parsed"][0].year == 2024
 
     def test_lazy_large_frame(self):
         """Lazy frame with 1M rows — collect column then infer."""
@@ -194,7 +194,7 @@ class TestPluginVsNativePolars:
         """Plugin produces byte-identical Datetime(us) values to native Polars."""
         n = 10_000
         df = pl.DataFrame({"ts": [sample] * n})
-        native = df.with_columns(pl.col("ts").str.to_datetime(format=polars_fmt))["ts"]
+        native = df.with_columns(pl.col("ts").str.to_datetime(format=polars_fmt))["ts"]  # pyright: ignore[reportAttributeAccessIssue]
         plugin = df.with_columns(pl.col("ts").infer_ts.to_datetime())["ts"]
         assert native.dtype == plugin.dtype == pl.Datetime
         assert (native == plugin).all(), (
@@ -217,7 +217,7 @@ class TestPluginVsNativePolars:
         """
         t_native, _ = _time(
             lambda: large_iso_df.with_columns(
-                pl.col("ts").str.to_datetime(format="%Y-%m-%dT%H:%M:%S")
+                pl.col("ts").str.to_datetime(format="%Y-%m-%dT%H:%M:%S")  # pyright: ignore[reportAttributeAccessIssue]
             )
         )
         t_plugin, _ = _time(lambda: large_iso_df.with_columns(pl.col("ts").infer_ts.to_datetime()))

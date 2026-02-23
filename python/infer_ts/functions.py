@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from polars.plugins import register_plugin_function
+from polars.plugins import register_plugin_function  # pyright: ignore[reportUnknownVariableType]
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -42,8 +42,8 @@ def to_datetime_expr(
     Returns:
         A Polars expression producing a Datetime column.
     """
-    if time_unit not in ("ns", "us", "ms"):  # pyright: ignore[reportUnreachable]
-        raise ValueError(f"time_unit must be 'ns', 'us', or 'ms', got {time_unit!r}")
+    if time_unit not in ("ns", "us", "ms"):
+        raise ValueError(f"time_unit must be 'ns', 'us', or 'ms', got {time_unit!r}")  # pyright: ignore[reportUnreachable]
     return register_plugin_function(
         plugin_path=PLUGIN_PATH,
         function_name=f"to_datetime_expr_{time_unit}",

@@ -18,7 +18,7 @@ class ExprInferTsNamespace:
     """Expression namespace for infer-ts timestamp inference."""
 
     def __init__(self, expr: pl.Expr):
-        self._expr = expr
+        self._expr: pl.Expr = expr
 
     def to_datetime(
         self,
