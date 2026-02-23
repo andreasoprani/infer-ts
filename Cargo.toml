@@ -3,6 +3,7 @@ name = "infer-ts"
 version = "0.1.0"
 edition = "2021"
 description = "Infer timestamp formats from string columns using CSP constraint elimination"
+license = "MIT"
 
 [lib]
 name = "infer_ts"

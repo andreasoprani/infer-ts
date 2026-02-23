@@ -12,24 +12,38 @@ strip = true
 name = "infer-ts"
 version = "0.1.0"
 description = "Infer timestamp formats from string columns using CSP constraint elimination"
+readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
+authors = [
+    { name = "Andrea Soprani" },
+]
+keywords = ["polars", "datetime", "timestamp", "inference", "parsing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = ["polars>=1.0"]
 
-[project.optional-dependencies]
-dev = ["pyarrow", "pytest"]
+[project.urls]
+Homepage = "https://github.com/andreasoprani/infer-ts"
+Repository = "https://github.com/andreasoprani/infer-ts"
+Issues = "https://github.com/andreasoprani/infer-ts/issues"
 
 [dependency-groups]
 dev = [
     "basedpyright>=1.37.4",
     "pyarrow>=21.0.0",
+    "pytest>=8.0",
 ]
 
 [tool.pyright]

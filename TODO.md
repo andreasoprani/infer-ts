@@ -26,11 +26,10 @@
 
 ## Docs / metadata
 
-- [ ] Add missing `pyproject.toml` metadata: `[project.urls]` (homepage, repository, changelog), `authors`, `readme = "README.md"`, `keywords`, per-version Python classifiers (`3.9`–`3.13`)
-- [ ] Consolidate split dev dependencies — `pyproject.toml` has both `[project.optional-dependencies].dev` and `[dependency-groups].dev` with overlapping/inconsistent contents (`pyarrow` in both, `polars`/`pytest` missing from one)
-- [ ] Update README examples to pass Series directly instead of `.to_list()` (`README.md:164,187`)
-- [ ] Remove "vibe-coded" note from `README.md:8` before making the repo public
-- [ ] Add `license` field to `Cargo.toml` (e.g. `license = "MIT"`)
+- [x] Add missing `pyproject.toml` metadata: `[project.urls]` (homepage, repository, changelog), `authors`, `readme = "README.md"`, `keywords`, per-version Python classifiers (`3.9`–`3.13`)
+- [x] Consolidate split dev dependencies — `pyproject.toml` has both `[project.optional-dependencies].dev` and `[dependency-groups].dev` with overlapping/inconsistent contents (`pyarrow` in both, `polars`/`pytest` missing from one)
+- [x] Update README examples to pass Series directly instead of `.to_list()` (`README.md:164,187`)
+- [x] Add `license` field to `Cargo.toml` (e.g. `license = "MIT"`)
 
 ## Tests
 
@@ -51,6 +50,8 @@
 
 ## Distribution
 
+- [ ] pre-commit hook for ruff formatting of the python side
+- [ ] CI step for pyright and ruff formatting of the python side
 - [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
 
 

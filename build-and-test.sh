@@ -10,7 +10,7 @@ cargo test -- --ignored dump_formats
 
 echo ""
 echo "==> Rebuilding Python package..."
-uv sync --reinstall-package infer-ts --all-extras
+uv sync --reinstall-package infer-ts
 
 echo ""
 echo "==> Running Python tests..."
