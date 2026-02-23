@@ -424,3 +424,44 @@ fn parse_dow_abbr(s: &str) -> Option<chrono::Weekday> {
     }
 }
 
+
+#[cfg(test)]
+impl DateFmt {
+    /// Human-readable name for documentation tables.
+    pub(super) fn name(&self) -> &'static str {
+        match self {
+            DateFmt::Iso => "ISO 8601",
+            DateFmt::SlashUS => "US slash, 4-digit year",
+            DateFmt::SlashEU => "EU slash, 4-digit year",
+            DateFmt::SlashUSShort => "US slash, 2-digit year",
+            DateFmt::SlashEUShort => "EU slash, 2-digit year",
+            DateFmt::DotEU => "EU dot, 4-digit year",
+            DateFmt::DotEUShort => "EU dot, 2-digit year",
+            DateFmt::Compact => "Compact",
+            DateFmt::MonthUS => "Month-name US, 4-digit year",
+            DateFmt::MonthUSShort => "Month-name US, 2-digit year",
+            DateFmt::MonthEU => "Month-name EU, 4-digit year",
+            DateFmt::MonthEUShort => "Month-name EU, 2-digit year",
+            DateFmt::Rfc2822 => "RFC 2822",
+        }
+    }
+
+    /// Canonical example value for documentation tables.
+    pub(super) fn example(&self) -> &'static str {
+        match self {
+            DateFmt::Iso => "2024-01-15",
+            DateFmt::SlashUS => "01/15/2024",
+            DateFmt::SlashEU => "15/01/2024",
+            DateFmt::SlashUSShort => "01/15/24",
+            DateFmt::SlashEUShort => "15/01/24",
+            DateFmt::DotEU => "15.01.2024",
+            DateFmt::DotEUShort => "15.01.24",
+            DateFmt::Compact => "20240115",
+            DateFmt::MonthUS => "Jan 15, 2024",
+            DateFmt::MonthUSShort => "Jan 15, 24",
+            DateFmt::MonthEU => "15 Jan 2024",
+            DateFmt::MonthEUShort => "15 Jan 24",
+            DateFmt::Rfc2822 => "Tue, 15 Jan 2024",
+        }
+    }
+}

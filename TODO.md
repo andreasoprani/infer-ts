@@ -10,7 +10,7 @@
 
 ## Docs
 
-- [ ] Auto-generate the supported format tables in a separate `FORMATS.md` from the Rust source (e.g. a `cargo test -- --ignored dump_formats` that writes the file), then reference it from the README instead of maintaining the tables by hand.
+- [x] Auto-generate the supported format tables in a separate `FORMATS.md` from the Rust source (e.g. a `cargo test -- --ignored dump_formats` that writes the file), then reference it from the README instead of maintaining the tables by hand.
 
 ## Future features
 

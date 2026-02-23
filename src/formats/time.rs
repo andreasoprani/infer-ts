@@ -282,3 +282,65 @@ pub(super) fn parse_timezone(s: &str, tz: Timezone) -> Option<&str> {
         }
     }
 }
+
+#[cfg(test)]
+impl TimeFmt {
+    /// All time formats, in definition order.
+    pub(super) const fn all() -> &'static [TimeFmt] {
+        &[
+            TimeFmt::Hms,
+            TimeFmt::HmsFrac,
+            TimeFmt::HmsCompact,
+            TimeFmt::Hms12,
+            TimeFmt::Hms12Compact,
+        ]
+    }
+
+    /// Human-readable name for documentation tables.
+    pub(super) fn name(&self) -> &'static str {
+        match self {
+            TimeFmt::Hms => "24-hour",
+            TimeFmt::HmsFrac => "24-hour + fractional seconds",
+            TimeFmt::HmsCompact => "24-hour compact",
+            TimeFmt::Hms12 => "12-hour AM/PM",
+            TimeFmt::Hms12Compact => "12-hour AM/PM compact",
+        }
+    }
+
+    /// Canonical example value for documentation tables.
+    pub(super) fn example(&self) -> &'static str {
+        match self {
+            TimeFmt::Hms => "10:30:00",
+            TimeFmt::HmsFrac => "10:30:00.123456",
+            TimeFmt::HmsCompact => "103000",
+            TimeFmt::Hms12 => "10:30:00 PM",
+            TimeFmt::Hms12Compact => "10:30:00PM",
+        }
+    }
+}
+
+#[cfg(test)]
+impl Timezone {
+    /// All timezone variants, in definition order.
+    pub(super) const fn all() -> &'static [Timezone] {
+        &[Timezone::Utc, Timezone::Offset, Timezone::OffsetCompact]
+    }
+
+    /// Human-readable name for documentation tables.
+    pub(super) fn name(&self) -> &'static str {
+        match self {
+            Timezone::Utc => "UTC",
+            Timezone::Offset => "Offset with colon",
+            Timezone::OffsetCompact => "Compact offset",
+        }
+    }
+
+    /// Canonical example value for documentation tables.
+    pub(super) fn example(&self) -> &'static str {
+        match self {
+            Timezone::Utc => "Z",
+            Timezone::Offset => "+05:30",
+            Timezone::OffsetCompact => "+0530",
+        }
+    }
+}

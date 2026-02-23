@@ -21,6 +21,50 @@ impl UnixPrecision {
             UnixPrecision::Nanoseconds,
         ]
     }
+
+}
+
+#[cfg(test)]
+impl UnixPrecision {
+    /// Human-readable name for documentation tables.
+    pub(super) fn name(&self) -> &'static str {
+        match self {
+            UnixPrecision::Seconds => "Seconds",
+            UnixPrecision::Milliseconds => "Milliseconds",
+            UnixPrecision::Microseconds => "Microseconds",
+            UnixPrecision::Nanoseconds => "Nanoseconds",
+        }
+    }
+
+    /// Canonical example value for documentation tables.
+    pub(super) fn example(&self) -> &'static str {
+        match self {
+            UnixPrecision::Seconds => "1705312200",
+            UnixPrecision::Milliseconds => "1705312200000",
+            UnixPrecision::Microseconds => "1705312200000000",
+            UnixPrecision::Nanoseconds => "1705312200000000000",
+        }
+    }
+
+    /// Digit-count range string for documentation tables.
+    pub(super) fn digits(&self) -> &'static str {
+        match self {
+            UnixPrecision::Seconds => "9\u{2013}10",
+            UnixPrecision::Milliseconds => "11\u{2013}13",
+            UnixPrecision::Microseconds => "14\u{2013}16",
+            UnixPrecision::Nanoseconds => "17\u{2013}19",
+        }
+    }
+
+    /// Approximate date range string for documentation tables.
+    pub(super) fn date_range(&self) -> &'static str {
+        match self {
+            UnixPrecision::Seconds => "1973-03-03 \u{2026} 2286-11-20",
+            UnixPrecision::Milliseconds => "1970 \u{2026} 2286 (ms)",
+            UnixPrecision::Microseconds => "1970 \u{2026} 2286 (\u{b5}s)",
+            UnixPrecision::Nanoseconds => "1677 \u{2026} 2262 (ns, i64)",
+        }
+    }
 }
 
 /// Unix epoch timestamp (bare integer).

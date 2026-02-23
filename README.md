@@ -66,77 +66,14 @@ data) and flexible (use `exhaustive=True` to validate the _entire_ column).
 
 ## Supported formats
 
-Datetime formats are detected **compositionally**: a date pattern, a separator (`T` or
-space), a time pattern, and an optional timezone suffix are each matched independently.
-Any valid combination is recognised automatically. Date-only values (no time component)
-are also detected for all date patterns.
+See **[FORMATS.md](FORMATS.md)** for the full reference tables (date patterns,
+time patterns, timezone suffixes, and Unix epoch formats with their Polars format
+strings). That file is auto-generated from the Rust source — to regenerate after
+changing any format definitions:
 
-### Date patterns
-
-| Name | Example | Polars fragment |
-| ---- | ------- | --------------- |
-| ISO 8601 | `2024-01-15` | `%Y-%m-%d` |
-| US slash, 4-digit year | `01/15/2024` | `%m/%d/%Y` |
-| US slash, 2-digit year | `01/15/24` | `%m/%d/%y` |
-| EU slash, 4-digit year | `15/01/2024` | `%d/%m/%Y` |
-| EU slash, 2-digit year | `15/01/24` | `%d/%m/%y` |
-| EU dot, 4-digit year | `15.01.2024` | `%d.%m.%Y` |
-| EU dot, 2-digit year | `15.01.24` | `%d.%m.%y` |
-| Compact | `20240115` | `%Y%m%d` |
-| Month-name US, 4-digit year | `Jan 15, 2024` | `%b %d, %Y` |
-| Month-name US, 2-digit year | `Jan 15, 24` | `%b %d, %y` |
-| Month-name EU, 4-digit year | `15 Jan 2024` | `%d %b %Y` |
-| Month-name EU, 2-digit year | `15 Jan 24` | `%d %b %y` |
-| RFC 2822 | `Tue, 15 Jan 2024` | `%a, %d %b %Y` |
-
-2-digit years are expanded using the POSIX convention: 00–68 → 2000–2068, 69–99 → 1969–1999.
-
-### Time patterns
-
-| Name | Example | Polars fragment |
-| ---- | ------- | --------------- |
-| 24-hour | `10:30:00` | `%H:%M:%S` |
-| 24-hour + fractional seconds | `10:30:00.123456` | `%H:%M:%S%.f` |
-| 24-hour compact | `103000` | `%H%M%S` |
-| 12-hour AM/PM | `10:30:00 PM` | `%I:%M:%S %p` |
-| 12-hour AM/PM compact | `10:30:00PM` | `%I:%M:%S%p` |
-
-Date and time are joined by `T` (ISO 8601 style) or a single space.
-
-### Timezone suffixes (optional)
-
-| Name | Example | Polars fragment |
-| ---- | ------- | --------------- |
-| UTC | `Z` | `Z` |
-| Offset with colon | `+05:30` | `%:z` |
-| Compact offset | `+0530` | `%z` |
-
-A space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).
-
-### Unix epoch formats
-
-| Name | Example | Marker |
-| ---- | ------- | ------ |
-| Unix seconds | `1705312200` | `@unix_seconds` |
-| Unix milliseconds | `1705312200000` | `@unix_ms` |
-| Unix microseconds | `1705312200000000` | `@unix_us` |
-| Unix nanoseconds | `1705312200000000000` | `@unix_ns` |
-
-`infer_format` returns a `@`-prefixed marker for epoch columns; see
-[Polars – Unix epoch formats](#polars--unix-epoch-formats) below for how to apply them.
-
-### Unix epoch digit-count ranges
-
-Unix formats use non-overlapping digit-count windows so the CSP can discriminate between units without ambiguity:
-
-| Variant          | Digit count | Approx. date range      |
-| ---------------- | ----------- | ----------------------- |
-| UnixSeconds      | 9–10        | 1973-03-03 … 2286-11-20 |
-| UnixMilliseconds | 11–13       | 1970 … 2286 (ms)        |
-| UnixMicroseconds | 14–16       | 1970 … 2286 (µs)        |
-| UnixNanoseconds  | 17–19       | 1677 … 2262 (ns, i64)   |
-
-Values with 1–8 digits do not match any Unix variant; 8-digit numeric strings are handled exclusively by `DateCompact` (if the digits form a valid date).
+```sh
+cargo test -- --ignored dump_formats
+```
 
 ### Architecture: Compositional format design
 
