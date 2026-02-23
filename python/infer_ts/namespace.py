@@ -41,4 +41,3 @@ class ExprInferTsNamespace:
             raise_on_multiple=raise_on_multiple,
             time_unit=time_unit,
         )
-

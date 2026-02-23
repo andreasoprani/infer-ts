@@ -4,12 +4,12 @@ Covers both the namespace style (pl.col("ts").infer_ts.to_datetime()) and
 the functional style (infer_ts.to_datetime_expr("ts")).
 """
 
-import infer_ts
 import polars as pl
 import pytest
 
-from conftest import _dt
+import infer_ts
 
+from .conftest import _dt
 
 # ─── Namespace: to_datetime ──────────────────────────────────────────────────
 
@@ -147,9 +147,7 @@ class TestTimeUnit:
 
     def test_functional_time_unit_ns(self):
         df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
-        result = df.with_columns(
-            infer_ts.to_datetime_expr(pl.col("ts"), time_unit="ns")
-        )
+        result = df.with_columns(infer_ts.to_datetime_expr(pl.col("ts"), time_unit="ns"))
         assert result["ts"].dtype == pl.Datetime("ns")
 
 
@@ -166,9 +164,7 @@ class TestErrors:
 
     def test_no_raise_on_multiple(self):
         df = pl.DataFrame({"ts": ["01/02/2024", "03/04/2024"]})
-        result = df.with_columns(
-            pl.col("ts").infer_ts.to_datetime(raise_on_multiple=False)
-        )
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime(raise_on_multiple=False))
         assert result["ts"].dtype == pl.Datetime
 
     def test_all_null(self):

@@ -43,9 +43,7 @@ def to_datetime_expr(
         A Polars expression producing a Datetime column.
     """
     if time_unit not in ("ns", "us", "ms"):  # pyright: ignore[reportUnreachable]
-        raise ValueError(
-            f"time_unit must be 'ns', 'us', or 'ms', got {time_unit!r}"
-        )
+        raise ValueError(f"time_unit must be 'ns', 'us', or 'ms', got {time_unit!r}")
     return register_plugin_function(
         plugin_path=PLUGIN_PATH,
         function_name=f"to_datetime_expr_{time_unit}",

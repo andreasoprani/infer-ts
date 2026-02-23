@@ -50,8 +50,8 @@
 
 ## Distribution
 
-- [ ] pre-commit hook for ruff formatting of the python side
-- [ ] CI step for pyright and ruff formatting of the python side
+- [x] pre-commit hook for ruff formatting of the python side (use prek)
+- [x] CI step for pyright and ruff formatting of the python side
 - [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
 
 

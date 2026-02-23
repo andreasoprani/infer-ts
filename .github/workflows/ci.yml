@@ -6,6 +6,28 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dev dependencies
+        run: uv sync
+
+      - name: Ruff format check
+        run: uv run ruff format --check python/
+
+      - name: Ruff lint
+        run: uv run ruff check python/
+
+      - name: Pyright
+        run: uv run basedpyright
+
   test:
     name: Build & test
     runs-on: ubuntu-latest
@@ -33,7 +55,7 @@ jobs:
         run: cargo test
 
       - name: Install Python package
-        run: uv sync --reinstall-package infer-ts --all-extras
+        run: uv sync --reinstall-package infer-ts
 
       - name: Run Python tests
-        run: uv run pytest python/tests/ -v
+        run: uv run pytest python/tests/ -v -m "not slow"

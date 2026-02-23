@@ -44,10 +44,20 @@ dev = [
     "basedpyright>=1.37.4",
     "pyarrow>=21.0.0",
     "pytest>=8.0",
+    "ruff>=0.6",
 ]
 
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (1M-row datasets, timing assertions)"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["infer_ts"]
 
 [tool.pyright]
 extraPaths = ["python"]

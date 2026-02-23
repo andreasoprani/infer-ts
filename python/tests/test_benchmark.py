@@ -10,9 +10,10 @@ Verifies:
 import time
 from typing import Any, Callable
 
-import infer_ts
 import polars as pl
 import pytest
+
+import infer_ts
 
 pytestmark = pytest.mark.slow
 
@@ -50,8 +51,7 @@ class TestEarlyExitUnambiguous:
         t_exhaust, fmts = _time(lambda: infer_ts.infer_format(series, exhaustive=True))
         assert fmts == ["%Y-%m-%dT%H:%M:%S%:z"]
         assert t_early * 10 < t_exhaust, (
-            f"early-exit ({t_early:.4f}s) should be >=10× faster "
-            f"than exhaustive ({t_exhaust:.4f}s)"
+            f"early-exit ({t_early:.4f}s) should be >=10× faster than exhaustive ({t_exhaust:.4f}s)"
         )
 
 
@@ -97,8 +97,7 @@ class TestSeriesVsList:
         t_list, fmts_l = _time(lambda: infer_ts.infer_format(lst, exhaustive=True))
         assert fmts_s == fmts_l
         assert t_series < t_list, (
-            f"Series path ({t_series:.4f}s) should be faster "
-            f"than list path ({t_list:.4f}s)"
+            f"Series path ({t_series:.4f}s) should be faster than list path ({t_list:.4f}s)"
         )
 
 
@@ -136,9 +135,7 @@ class TestLazyFrame:
 
     @pytest.fixture(scope="class")
     def lazy_frame(self) -> pl.LazyFrame:
-        return pl.LazyFrame(
-            {"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"] * 500}
-        )
+        return pl.LazyFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"] * 500})
 
     def test_collect_then_infer(self, lazy_frame: pl.LazyFrame):
         """Standard pattern: collect column, then infer format / to_datetime."""
@@ -153,9 +150,7 @@ class TestLazyFrame:
     def test_map_batches_integration(self, lazy_frame: pl.LazyFrame):
         """map_batches pattern for lazy-compatible usage."""
         result = lazy_frame.with_columns(
-            pl.col("ts")
-            .map_batches(infer_ts.to_datetime, return_dtype=pl.Datetime)
-            .alias("parsed")
+            pl.col("ts").map_batches(infer_ts.to_datetime, return_dtype=pl.Datetime).alias("parsed")
         ).collect()
 
         assert result["parsed"].dtype == pl.Datetime
@@ -203,8 +198,7 @@ class TestPluginVsNativePolars:
         plugin = df.with_columns(pl.col("ts").infer_ts.to_datetime())["ts"]
         assert native.dtype == plugin.dtype == pl.Datetime
         assert (native == plugin).all(), (
-            f"values differ for format {polars_fmt!r}: "
-            f"native={native[0]!r}, plugin={plugin[0]!r}"
+            f"values differ for format {polars_fmt!r}: native={native[0]!r}, plugin={plugin[0]!r}"
         )
 
     # ── Performance ──────────────────────────────────────────────────────────
@@ -226,12 +220,9 @@ class TestPluginVsNativePolars:
                 pl.col("ts").str.to_datetime(format="%Y-%m-%dT%H:%M:%S")
             )
         )
-        t_plugin, _ = _time(
-            lambda: large_iso_df.with_columns(pl.col("ts").infer_ts.to_datetime())
-        )
+        t_plugin, _ = _time(lambda: large_iso_df.with_columns(pl.col("ts").infer_ts.to_datetime()))
         assert t_plugin < t_native * 1.5, (
-            f"Plugin ({t_plugin:.3f}s) more than 1.5× slower than "
-            f"native Polars ({t_native:.3f}s)"
+            f"Plugin ({t_plugin:.3f}s) more than 1.5× slower than native Polars ({t_native:.3f}s)"
         )
 
 

@@ -6,9 +6,8 @@ wrapper that transparently handles both strftime and ``@unix_*`` formats.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
-
 from collections.abc import Iterable
+from typing import TYPE_CHECKING, Literal
 
 from ._infer_ts import __version__
 from ._infer_ts import infer_format_iter as _infer_format_iter
@@ -18,7 +17,6 @@ if TYPE_CHECKING:
     import polars as pl
 
 import infer_ts.namespace  # noqa: F401  — registers the expr namespace
-
 from infer_ts.functions import to_datetime_expr
 
 __all__ = [

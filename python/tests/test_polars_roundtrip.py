@@ -11,12 +11,12 @@ Coverage (per TODO v0.1):
 - Unix epoch (seconds, ms, µs, ns)
 """
 
-import infer_ts
 import polars as pl
 import pytest
 
-from conftest import _d, _dt
+import infer_ts
 
+from .conftest import _d, _dt
 
 # ─── ISO 8601 ─────────────────────────────────────────────────────────────────
 
@@ -599,9 +599,7 @@ class TestRfc2822:
     """RFC 2822 / email-style datetime formats."""
 
     def test_rfc2822_compact_offset(self):
-        s = pl.Series(
-            "ts", ["Mon, 15 Jan 2024 10:30:00 +0530", "Thu, 20 Jun 2024 08:00:00 -0800"]
-        )
+        s = pl.Series("ts", ["Mon, 15 Jan 2024 10:30:00 +0530", "Thu, 20 Jun 2024 08:00:00 -0800"])
         result = infer_ts.to_datetime(s)
 
         assert result.dtype == pl.Datetime
@@ -789,9 +787,7 @@ class TestIteratorInterface:
 
     def test_tuple_iterable(self):
         """Accepts any iterable, not just generators."""
-        fmts = infer_ts.infer_format(
-            iter(("2024-01-15", "2024-06-20"))
-        )
+        fmts = infer_ts.infer_format(iter(("2024-01-15", "2024-06-20")))
         assert fmts == ["%Y-%m-%d"]
 
     def test_empty_generator(self):

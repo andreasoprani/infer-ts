@@ -11,7 +11,6 @@ def infer_format_series(
     *,
     exhaustive: bool = False,
 ) -> list[str]: ...
-
 def infer_format_iter(
     values: Iterable[str | None],
     *,
