@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 from polars.plugins import register_plugin_function
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     import polars as pl
 
 PLUGIN_PATH = Path(__file__).parent
@@ -24,7 +26,7 @@ def to_datetime_expr(
     *,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
-    time_unit: str = "us",
+    time_unit: Literal["ns", "us", "ms"] = "us",
 ) -> pl.Expr:
     """Infer timestamp format and cast a string column to Datetime.
 
@@ -40,7 +42,7 @@ def to_datetime_expr(
     Returns:
         A Polars expression producing a Datetime column.
     """
-    if time_unit not in ("ns", "us", "ms"):
+    if time_unit not in ("ns", "us", "ms"):  # pyright: ignore[reportUnreachable]
         raise ValueError(
             f"time_unit must be 'ns', 'us', or 'ms', got {time_unit!r}"
         )
@@ -54,5 +56,3 @@ def to_datetime_expr(
             "raise_on_multiple": raise_on_multiple,
         },
     )
-
-

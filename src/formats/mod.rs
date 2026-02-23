@@ -1215,6 +1215,48 @@ mod tests {
         out
     }
 
+    /// Verify that every format's example value is accepted by its own parser.
+    ///
+    /// This guards against examples that look plausible but are structurally
+    /// invalid (e.g. a wrong weekday in RFC 2822, or a time string that the
+    /// validator would reject).
+    #[test]
+    fn examples_self_consistent() {
+        for fmt in date::DateFmt::all() {
+            let example = fmt.example();
+            let df = date::DateFormat { date: *fmt };
+            assert!(
+                df.validates(&example),
+                "DateFmt::{fmt:?} example {example:?} is rejected by its own parser"
+            );
+        }
+
+        for fmt in time::TimeFmt::all() {
+            let example = fmt.example();
+            assert!(
+                time::parse_time(&example, *fmt).is_some_and(|r| r.is_empty()),
+                "TimeFmt::{fmt:?} example {example:?} is rejected by its own parser"
+            );
+        }
+
+        for tz in time::Timezone::all() {
+            let example = tz.example();
+            assert!(
+                time::parse_timezone(&example, *tz).is_some_and(|r| r.is_empty()),
+                "Timezone::{tz:?} example {example:?} is rejected by its own parser"
+            );
+        }
+
+        for p in unix::UnixPrecision::all() {
+            let example = p.example();
+            let uf = unix::UnixFormat { precision: *p };
+            assert!(
+                uf.validates(&example),
+                "UnixPrecision::{p:?} example {example:?} is rejected by its own validator"
+            );
+        }
+    }
+
     /// Write FORMATS.md to the project root from the Rust format definitions.
     ///
     /// Run with:

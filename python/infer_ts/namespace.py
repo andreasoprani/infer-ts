@@ -6,6 +6,8 @@ Importing this module registers the namespace so that
 
 from __future__ import annotations
 
+from typing import Literal
+
 import polars as pl
 
 from infer_ts.functions import to_datetime_expr
@@ -23,7 +25,7 @@ class ExprInferTsNamespace:
         *,
         exhaustive: bool = False,
         raise_on_multiple: bool = True,
-        time_unit: str = "us",
+        time_unit: Literal["ns", "us", "ms"] = "us",
     ) -> pl.Expr:
         """Infer timestamp format and cast to Datetime.
 

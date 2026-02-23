@@ -21,7 +21,7 @@ Datetime formats are detected **compositionally**: date + separator (`T` or spac
 | Month-name US, 2-digit year | `Jan 15, 24` | `%b %d, %y` |
 | Month-name EU, 4-digit year | `15 Jan 2024` | `%d %b %Y` |
 | Month-name EU, 2-digit year | `15 Jan 24` | `%d %b %y` |
-| RFC 2822 | `Tue, 15 Jan 2024` | `%a, %d %b %Y` |
+| RFC 2822 | `Mon, 15 Jan 2024` | `%a, %d %b %Y` |
 
 2-digit years are expanded using the POSIX convention: 00–68 → 2000–2068, 69–99 → 1969–1999.
 
@@ -53,10 +53,10 @@ A space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).
 
 | Name | Example | Marker |
 | ---- | ------- | ------ |
-| Unix Seconds | `1705312200` | `@unix_seconds` |
-| Unix Milliseconds | `1705312200000` | `@unix_ms` |
-| Unix Microseconds | `1705312200000000` | `@unix_us` |
-| Unix Nanoseconds | `1705312200000000000` | `@unix_ns` |
+| Unix Seconds | `1705314600` | `@unix_seconds` |
+| Unix Milliseconds | `1705314600000` | `@unix_ms` |
+| Unix Microseconds | `1705314600000000` | `@unix_us` |
+| Unix Nanoseconds | `1705314600000000000` | `@unix_ns` |
 
 ## Unix epoch digit-count ranges
 

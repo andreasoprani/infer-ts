@@ -14,15 +14,15 @@
 
 ## Bugs / correctness
 
-- [ ] Wrong RFC 2822 day-of-week in example (`src/formats/date.rs:464`, `FORMATS.md:24`) — `"Tue, 15 Jan 2024"` but January 15 2024 was a Monday; the parser validates weekday so this example would be rejected by its own parser; fix to `"Mon, 15 Jan 2024"` in `date.rs` (FORMATS.md is auto-generated)
-- [ ] Stale false docstring in `__init__.py:53` — claims "Lists use a faster bulk path" but lists go through the same `iter()` path as everything else; remove the claim
-- [ ] `to_datetime()` docstring says "Returns: A Polars Series with Datetime (or Date) dtype" (`__init__.py:79`) — Date is never returned, always Datetime
+- [x] Wrong RFC 2822 day-of-week in example (`src/formats/date.rs:464`, `FORMATS.md:24`) — `"Tue, 15 Jan 2024"` but January 15 2024 was a Monday; the parser validates weekday so this example would be rejected by its own parser; fix to `"Mon, 15 Jan 2024"` in `date.rs` (FORMATS.md is auto-generated)
+- [x] Stale false docstring in `__init__.py:53` — claims "Lists use a faster bulk path" but lists go through the same `iter()` path as everything else; remove the claim
+- [x] `to_datetime()` docstring says "Returns: A Polars Series with Datetime (or Date) dtype" (`__init__.py:79`) — Date is never returned, always Datetime
 
 ## API / type annotation inconsistencies
 
-- [ ] `time_unit: str` instead of `Literal["ns", "us", "ms"]` in `functions.py:27` and `namespace.py:26` — should match `__init__.py` and the stub
-- [ ] `ExprInferTsNamespace` not exported from `__init__.pyi` — users can't type-annotate against it
-- [ ] `iter` parameter name in `_infer_ts.pyi:16` shadows the Python builtin `iter()` — rename to `values` or `iterable`
+- [x] `time_unit: str` instead of `Literal["ns", "us", "ms"]` in `functions.py:27` and `namespace.py:26` — should match `__init__.py` and the stub
+- [x] `ExprInferTsNamespace` not exported from `__init__.pyi` — users can't type-annotate against it
+- [x] `iter` parameter name in `_infer_ts.pyi:16` shadows the Python builtin `iter()` — rename to `values` or `iterable`
 
 ## Docs / metadata
 
@@ -39,7 +39,7 @@
 - [ ] Add roundtrip test for RFC 2822 date-only format (`"Mon, 15 Jan 2024"`)
 - [ ] Add roundtrip tests for spaced-timezone formats (`"2024-01-15 10:30:00 +05:30"`) via Python API
 - [ ] Add plugin-path tests for dot-separated EU, month-name, and RFC 2822 formats in `test_plugin.py`
-- [ ] Add test for `scale_unix` overflow boundary (e.g. `9_999_999_999` seconds with `time_unit="ns"`)
+- [x] Add test for `scale_unix` overflow boundary (e.g. `9_999_999_999` seconds with `time_unit="ns"`)
 - [ ] Move shared `_dt`/`_d` helpers from `test_plugin.py:14` and `test_polars_roundtrip.py:21` into a `conftest.py`
 - [ ] Mark fragile timing assertions in `test_benchmark.py:50,230` with `pytest.mark.slow` and exclude from normal CI
 
@@ -47,7 +47,7 @@
 
 - [ ] `FeedResult` and `InferResult` in `src/inference.rs:30,40` are `pub` but effectively crate-private — change to `pub(crate)`
 - [ ] Add `codegen-units = 1` to `[profile.release]` in `Cargo.toml` — pairs with the existing `lto = true` for full LTO benefit
-- [ ] Fix trailing double blank line at end of `python/infer_ts/functions.py`
+- [x] Fix trailing double blank line at end of `python/infer_ts/functions.py`
 
 ## Distribution
 
@@ -56,6 +56,7 @@
 
 ## Future features
 
+- [ ] Support also `to_date` and an argument to `to_datetime` to prefer a pl.Date dtype if the format is date-only
 - [ ] Named timezone support (`EST`, `PST`, `JST` etc.) — requires IANA tzdata integration
 - [ ] Property-based testing with `proptest` for fuzzy date/timezone validation
 - [ ] Add a `CHANGELOG.md` to track version history

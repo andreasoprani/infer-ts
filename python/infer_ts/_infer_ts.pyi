@@ -13,7 +13,7 @@ def infer_format_series(
 ) -> list[str]: ...
 
 def infer_format_iter(
-    iter: Iterable[str | None],
+    values: Iterable[str | None],
     *,
     exhaustive: bool = False,
 ) -> list[str]: ...

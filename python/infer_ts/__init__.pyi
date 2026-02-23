@@ -26,3 +26,13 @@ def to_datetime_expr(
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
 ) -> pl.Expr: ...
+
+class ExprInferTsNamespace:
+    def __init__(self, expr: pl.Expr) -> None: ...
+    def to_datetime(
+        self,
+        *,
+        exhaustive: bool = False,
+        raise_on_multiple: bool = True,
+        time_unit: Literal["ns", "us", "ms"] = "us",
+    ) -> pl.Expr: ...

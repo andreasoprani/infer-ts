@@ -49,7 +49,6 @@ def infer_format(
     Accepts a Polars Series or any iterable of strings (list, generator, etc.).
     Series uses zero-copy Arrow access; iterables are consumed lazily (streaming),
     so the full column never needs to be in memory at once.
-    Lists are detected at runtime and use a faster bulk path.
     """
     import polars as pl
 
@@ -76,7 +75,7 @@ def to_datetime(
             Defaults to ``"us"`` (microseconds).
 
     Returns:
-        A Polars Series with Datetime (or Date) dtype.
+        A Polars Series with ``Datetime(time_unit)`` dtype.
 
     Raises:
         ValueError: No format matches, or (if *raise_on_multiple*) ambiguous.
