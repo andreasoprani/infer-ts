@@ -22,8 +22,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
+[project.dependencies]
+polars = ">=0.52"
+
 [project.optional-dependencies]
-dev = ["polars", "pyarrow", "pytest"]
+dev = ["pyarrow", "pytest"]
 
 [dependency-groups]
 dev = [

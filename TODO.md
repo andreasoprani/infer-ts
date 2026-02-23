@@ -2,15 +2,57 @@
 
 ---
 
+## Blockers (PyPI publishing)
+
+- [x] Add a `LICENSE` file to the repo root (`pyproject.toml` has `license = { text = "MIT" }` inline but no actual file; `Cargo.toml` has no license field at all)
+- [x] Add `[project.dependencies]` with `polars` — it's imported at module load time but currently only listed under `[project.optional-dependencies].dev`, so `pip install infer-ts` would break immediately
+
+## Critical bugs
+
+- [ ] Integer overflow in `scale_unix` (`src/expressions.rs:155-157`) — upscaling Unix seconds/ms/μs to nanoseconds multiplies `i64` without overflow checks; Rust release builds wrap silently, same issue in `python/infer_ts/__init__.py:104` via Polars `Int64` arithmetic
+- [ ] README epoch example is wrong (`README.md:190-193`) — shows `cast(pl.Int64).cast(pl.Datetime("us"))` for Unix seconds, which interprets raw seconds as microseconds, producing wildly wrong dates; correct approach requires scaling first (as `to_datetime()` does correctly)
+
+## Bugs / correctness
+
+- [ ] Wrong RFC 2822 day-of-week in example (`src/formats/date.rs:464`, `FORMATS.md:24`) — `"Tue, 15 Jan 2024"` but January 15 2024 was a Monday; the parser validates weekday so this example would be rejected by its own parser; fix to `"Mon, 15 Jan 2024"` in `date.rs` (FORMATS.md is auto-generated)
+- [ ] Stale false docstring in `__init__.py:53` — claims "Lists use a faster bulk path" but lists go through the same `iter()` path as everything else; remove the claim
+- [ ] `to_datetime()` docstring says "Returns: A Polars Series with Datetime (or Date) dtype" (`__init__.py:79`) — Date is never returned, always Datetime
+
+## API / type annotation inconsistencies
+
+- [ ] `time_unit: str` instead of `Literal["ns", "us", "ms"]` in `functions.py:27` and `namespace.py:26` — should match `__init__.py` and the stub
+- [ ] `ExprInferTsNamespace` not exported from `__init__.pyi` — users can't type-annotate against it
+- [ ] `iter` parameter name in `_infer_ts.pyi:16` shadows the Python builtin `iter()` — rename to `values` or `iterable`
+
+## Docs / metadata
+
+- [ ] Add missing `pyproject.toml` metadata: `[project.urls]` (homepage, repository, changelog), `authors`, `readme = "README.md"`, `keywords`, per-version Python classifiers (`3.9`–`3.13`)
+- [ ] Consolidate split dev dependencies — `pyproject.toml` has both `[project.optional-dependencies].dev` and `[dependency-groups].dev` with overlapping/inconsistent contents (`pyarrow` in both, `polars`/`pytest` missing from one)
+- [ ] Update README examples to pass Series directly instead of `.to_list()` (`README.md:164,187`)
+- [ ] Remove "vibe-coded" note from `README.md:8` before making the repo public
+- [ ] Add `license` field to `Cargo.toml` (e.g. `license = "MIT"`)
+
+## Tests
+
+- [ ] Fix test assertions that hedge with `pl.Date or pl.Datetime` — since `to_datetime()` always returns `Datetime`, assert that specifically (multiple places in `test_polars_roundtrip.py`)
+- [ ] Add Python-level test for `exhaustive=True` returning multiple formats on ambiguous data
+- [ ] Add roundtrip test for RFC 2822 date-only format (`"Mon, 15 Jan 2024"`)
+- [ ] Add roundtrip tests for spaced-timezone formats (`"2024-01-15 10:30:00 +05:30"`) via Python API
+- [ ] Add plugin-path tests for dot-separated EU, month-name, and RFC 2822 formats in `test_plugin.py`
+- [ ] Add test for `scale_unix` overflow boundary (e.g. `9_999_999_999` seconds with `time_unit="ns"`)
+- [ ] Move shared `_dt`/`_d` helpers from `test_plugin.py:14` and `test_polars_roundtrip.py:21` into a `conftest.py`
+- [ ] Mark fragile timing assertions in `test_benchmark.py:50,230` with `pytest.mark.slow` and exclude from normal CI
+
+## Code quality
+
+- [ ] `FeedResult` and `InferResult` in `src/inference.rs:30,40` are `pub` but effectively crate-private — change to `pub(crate)`
+- [ ] Add `codegen-units = 1` to `[profile.release]` in `Cargo.toml` — pairs with the existing `lto = true` for full LTO benefit
+- [ ] Fix trailing double blank line at end of `python/infer_ts/functions.py`
+
 ## Distribution
 
-- [x] Add `cargo test` to `test-python.sh` so Rust unit tests run alongside Python tests — renamed to `build-and-test.sh`
-- [x] CI pipeline: build and run tests — `.github/workflows/ci.yml`
 - [ ] CI pipeline: build manylinux wheels with maturin and publish to PyPI
 
-## Docs
-
-- [x] Auto-generate the supported format tables in a separate `FORMATS.md` from the Rust source (e.g. a `cargo test -- --ignored dump_formats` that writes the file), then reference it from the README instead of maintaining the tables by hand.
 
 ## Future features
 
