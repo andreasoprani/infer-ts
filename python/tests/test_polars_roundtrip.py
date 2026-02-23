@@ -11,25 +11,11 @@ Coverage (per TODO v0.1):
 - Unix epoch (seconds, ms, µs, ns)
 """
 
-from datetime import date, datetime
-
 import infer_ts
 import polars as pl
 import pytest
 
-
-def _dt(s: pl.Series, idx: int) -> datetime:
-    """Extract element from series, asserting it's a datetime."""
-    v = s[idx]  # pyright: ignore[reportAny]
-    assert isinstance(v, datetime)
-    return v
-
-
-def _d(s: pl.Series, idx: int) -> date:
-    """Extract element from series, asserting it's a date (or datetime)."""
-    v = s[idx]  # pyright: ignore[reportAny]
-    assert isinstance(v, date)
-    return v
+from conftest import _d, _dt
 
 
 # ─── ISO 8601 ─────────────────────────────────────────────────────────────────
@@ -188,7 +174,7 @@ class TestSlashDates:
         s = pl.Series("ts", ["01/15/2024", "06/20/2024"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         # Verify it parsed as mm/dd (US): 01/15 = Jan 15
         v = _d(result, 0)
         assert v.month == 1
@@ -199,7 +185,7 @@ class TestSlashDates:
         s = pl.Series("ts", ["15/01/2024", "20/06/2024"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         # Verify it parsed as dd/mm (EU): 15/01 = Jan 15
         v = _d(result, 0)
         assert v.month == 1
@@ -223,7 +209,7 @@ class TestSlashDates:
         s = pl.Series("ts", ["01/15/24", "06/20/24"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -232,7 +218,7 @@ class TestSlashDates:
         s = pl.Series("ts", ["15/01/24", "20/06/24"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -262,7 +248,7 @@ class TestCompact:
         s = pl.Series("ts", ["20240115", "20240620"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.year == 2024
         assert v.month == 1
@@ -422,7 +408,7 @@ class TestDotDates:
         s = pl.Series("ts", ["15.01.2024", "20.06.2024"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -438,7 +424,7 @@ class TestDotDates:
         s = pl.Series("ts", ["15.01.24", "20.06.24"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -499,7 +485,7 @@ class TestMonthNameDates:
         s = pl.Series("ts", ["Jan 15, 2024", "Jun 20, 2024"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -508,7 +494,7 @@ class TestMonthNameDates:
         s = pl.Series("ts", ["15 Jan 2024", "20 Jun 2024"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -533,7 +519,7 @@ class TestMonthNameDates:
         s = pl.Series("ts", ["Jan 15, 24", "Jun 20, 24"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -542,7 +528,7 @@ class TestMonthNameDates:
         s = pl.Series("ts", ["15 Jan 24", "20 Jun 24"])
         result = infer_ts.to_datetime(s)
 
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -755,7 +741,7 @@ class TestToDatetimeAPI:
         """Use first match when raise_on_multiple=False."""
         s = pl.Series("ts", ["01/02/2024", "03/04/2024"])
         result = infer_ts.to_datetime(s, raise_on_multiple=False)
-        assert result.dtype == pl.Date or result.dtype == pl.Datetime
+        assert result.dtype == pl.Datetime
 
 
 # ─── Iterator / streaming interface ──────────────────────────────────────────
@@ -817,6 +803,86 @@ class TestIteratorInterface:
         """List input still dispatches to the fast list path."""
         fmts = infer_ts.infer_format(["2024-01-15T10:30:00"])
         assert fmts == ["%Y-%m-%dT%H:%M:%S"]
+
+
+# ─── exhaustive mode ──────────────────────────────────────────────────────────
+
+
+class TestExhaustiveMode:
+    """Tests for exhaustive=True scanning behaviour."""
+
+    def test_exhaustive_returns_multiple_on_ambiguous(self):
+        """With genuinely ambiguous data, exhaustive=True returns all matching formats."""
+        fmts = infer_ts.infer_format(["01/02/2024", "03/04/2024"], exhaustive=True)
+        assert len(fmts) == 2
+        assert "%d/%m/%Y" in fmts
+        assert "%m/%d/%Y" in fmts
+
+    def test_exhaustive_scans_all_values(self):
+        """exhaustive=True continues past a unique match, catching later contradictions."""
+        # Non-exhaustive: exits after first value narrows to one format
+        fmts = infer_ts.infer_format(["2024-01-15T10:30:00+05:30", "not-a-timestamp"])
+        assert fmts == ["%Y-%m-%dT%H:%M:%S%:z"]
+
+        # Exhaustive: second value eliminates all formats → empty
+        fmts = infer_ts.infer_format(
+            ["2024-01-15T10:30:00+05:30", "not-a-timestamp"], exhaustive=True
+        )
+        assert fmts == []
+
+
+# ─── RFC 2822 date-only ───────────────────────────────────────────────────────
+
+
+class TestRfc2822DateOnly:
+    """RFC 2822 date-only format (no time component)."""
+
+    def test_rfc2822_date_only_roundtrip(self):
+        s = pl.Series("ts", ["Mon, 15 Jan 2024", "Thu, 20 Jun 2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        v = _dt(result, 0)
+        assert (v.year, v.month, v.day) == (2024, 1, 15)
+
+    def test_rfc2822_date_only_format_string(self):
+        fmts = infer_ts.infer_format(["Mon, 15 Jan 2024"])
+        assert fmts == ["%a, %d %b %Y"]
+
+
+# ─── Spaced timezone ──────────────────────────────────────────────────────────
+
+
+class TestSpacedTimezone:
+    """Timestamps with a space between the time component and timezone offset."""
+
+    def test_space_sep_spaced_tz_offset(self):
+        s = pl.Series("ts", ["2024-01-15 10:30:00 +05:30", "2024-06-20 08:00:00 +02:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_space_sep_spaced_tz_compact(self):
+        s = pl.Series("ts", ["2024-01-15 10:30:00 +0530", "2024-06-20 08:00:00 +0200"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_t_sep_spaced_tz_compact(self):
+        s = pl.Series("ts", ["2024-01-15T10:30:00 +0530", "2024-06-20T08:00:00 +0200"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+
+    def test_spaced_tz_format_strings(self):
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00 +05:30"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S %:z"]
+
+        fmts = infer_ts.infer_format(["2024-01-15 10:30:00 +0530"])
+        assert fmts == ["%Y-%m-%d %H:%M:%S %z"]
+
+        fmts = infer_ts.infer_format(["2024-01-15T10:30:00 +0530"])
+        assert fmts == ["%Y-%m-%dT%H:%M:%S %z"]
 
 
 if __name__ == "__main__":

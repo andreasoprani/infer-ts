@@ -14,6 +14,8 @@ import infer_ts
 import polars as pl
 import pytest
 
+pytestmark = pytest.mark.slow
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

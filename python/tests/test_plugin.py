@@ -4,18 +4,11 @@ Covers both the namespace style (pl.col("ts").infer_ts.to_datetime()) and
 the functional style (infer_ts.to_datetime_expr("ts")).
 """
 
-from datetime import datetime
-
 import infer_ts
 import polars as pl
 import pytest
 
-
-def _dt(s: pl.Series, idx: int) -> datetime:
-    """Extract element from series, asserting it's a datetime."""
-    v = s[idx]  # pyright: ignore[reportAny]
-    assert isinstance(v, datetime)
-    return v
+from conftest import _dt
 
 
 # ─── Namespace: to_datetime ──────────────────────────────────────────────────
@@ -331,3 +324,73 @@ class TestFunctionalStyle:
         result = df.with_columns(infer_ts.to_datetime_expr(pl.col("ts"))).collect()
 
         assert result["ts"].dtype == pl.Datetime
+
+
+# ─── Dot-separated EU and month-name formats ─────────────────────────────────
+
+
+class TestDotAndMonthFormats:
+    """Plugin path for dot-separated EU and month-name date formats."""
+
+    def test_dot_eu_date(self):
+        df = pl.DataFrame({"ts": ["15.01.2024", "20.06.2024"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        v = _dt(result["ts"], 0)
+        assert (v.year, v.month, v.day) == (2024, 1, 15)
+
+    def test_dot_eu_datetime(self):
+        df = pl.DataFrame({"ts": ["15.01.2024 10:30:00", "20.06.2024 08:00:00"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        assert _dt(result["ts"], 0).hour == 10
+
+    def test_month_name_us(self):
+        df = pl.DataFrame({"ts": ["Jan 15, 2024", "Jun 20, 2024"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        v = _dt(result["ts"], 0)
+        assert (v.month, v.day) == (1, 15)
+
+    def test_month_name_eu(self):
+        df = pl.DataFrame({"ts": ["15 Jan 2024", "20 Jun 2024"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        v = _dt(result["ts"], 0)
+        assert (v.month, v.day) == (1, 15)
+
+    def test_month_name_us_datetime(self):
+        df = pl.DataFrame({"ts": ["Jan 15, 2024 10:30:00", "Jun 20, 2024 08:00:00"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        assert _dt(result["ts"], 0).hour == 10
+
+
+# ─── RFC 2822 via plugin ──────────────────────────────────────────────────────
+
+
+class TestRfc2822Plugin:
+    """RFC 2822 datetime and date-only formats via the expression plugin."""
+
+    def test_rfc2822_datetime(self):
+        df = pl.DataFrame(
+            {"ts": ["Mon, 15 Jan 2024 10:30:00 +0530", "Thu, 20 Jun 2024 08:00:00 -0800"]}
+        )
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        v = _dt(result["ts"], 0)
+        assert (v.month, v.day) == (1, 15)
+
+    def test_rfc2822_date_only(self):
+        df = pl.DataFrame({"ts": ["Mon, 15 Jan 2024", "Thu, 20 Jun 2024"]})
+        result = df.with_columns(pl.col("ts").infer_ts.to_datetime())
+
+        assert result["ts"].dtype == pl.Datetime
+        v = _dt(result["ts"], 0)
+        assert (v.month, v.day) == (1, 15)

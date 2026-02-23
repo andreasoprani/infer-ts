@@ -33,19 +33,19 @@
 
 ## Tests
 
-- [ ] Fix test assertions that hedge with `pl.Date or pl.Datetime` — since `to_datetime()` always returns `Datetime`, assert that specifically (multiple places in `test_polars_roundtrip.py`)
-- [ ] Add Python-level test for `exhaustive=True` returning multiple formats on ambiguous data
-- [ ] Add roundtrip test for RFC 2822 date-only format (`"Mon, 15 Jan 2024"`)
-- [ ] Add roundtrip tests for spaced-timezone formats (`"2024-01-15 10:30:00 +05:30"`) via Python API
-- [ ] Add plugin-path tests for dot-separated EU, month-name, and RFC 2822 formats in `test_plugin.py`
+- [x] Fix test assertions that hedge with `pl.Date or pl.Datetime` — since `to_datetime()` always returns `Datetime`, assert that specifically (multiple places in `test_polars_roundtrip.py`)
+- [x] Add Python-level test for `exhaustive=True` returning multiple formats on ambiguous data
+- [x] Add roundtrip test for RFC 2822 date-only format (`"Mon, 15 Jan 2024"`)
+- [x] Add roundtrip tests for spaced-timezone formats (`"2024-01-15 10:30:00 +05:30"`) via Python API
+- [x] Add plugin-path tests for dot-separated EU, month-name, and RFC 2822 formats in `test_plugin.py`
 - [x] Add test for `scale_unix` overflow boundary (e.g. `9_999_999_999` seconds with `time_unit="ns"`)
-- [ ] Move shared `_dt`/`_d` helpers from `test_plugin.py:14` and `test_polars_roundtrip.py:21` into a `conftest.py`
-- [ ] Mark fragile timing assertions in `test_benchmark.py:50,230` with `pytest.mark.slow` and exclude from normal CI
+- [x] Move shared `_dt`/`_d` helpers from `test_plugin.py:14` and `test_polars_roundtrip.py:21` into a `conftest.py`
+- [x] Mark fragile timing assertions in `test_benchmark.py:50,230` with `pytest.mark.slow` and exclude from normal CI
 
 ## Code quality
 
-- [ ] `FeedResult` and `InferResult` in `src/inference.rs:30,40` are `pub` but effectively crate-private — change to `pub(crate)`
-- [ ] Add `codegen-units = 1` to `[profile.release]` in `Cargo.toml` — pairs with the existing `lto = true` for full LTO benefit
+- [x] `FeedResult` and `InferResult` in `src/inference.rs:30,40` are `pub` but effectively crate-private — change to `pub(crate)`
+- [x] Add `codegen-units = 1` to `[profile.release]` in `Cargo.toml` — pairs with the existing `lto = true` for full LTO benefit
 - [x] Fix trailing double blank line at end of `python/infer_ts/functions.py`
 
 ## Distribution

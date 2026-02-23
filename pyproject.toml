@@ -46,6 +46,9 @@ dev = [
     "pytest>=8.0",
 ]
 
+[tool.pytest.ini_options]
+markers = ["slow: marks tests as slow (1M-row datasets, timing assertions)"]
+
 [tool.pyright]
 extraPaths = ["python"]
 stubPath = "typings"

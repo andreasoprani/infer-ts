@@ -27,7 +27,7 @@ pub struct InferState {
 }
 
 /// Result of feeding a value to [`InferState`].
-pub enum FeedResult {
+pub(crate) enum FeedResult {
     /// Keep feeding more values.
     Continue,
     /// Inference is done — no formats match.
@@ -38,7 +38,7 @@ pub enum FeedResult {
 
 /// Result of completing inference over a sequence of values.
 #[derive(Debug, PartialEq)]
-pub enum InferResult {
+pub(crate) enum InferResult {
     /// No non-null, non-whitespace values were seen — can't infer from empty data.
     NoData,
     /// Values were seen but no single format matched all of them.

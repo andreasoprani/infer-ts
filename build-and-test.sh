@@ -14,4 +14,4 @@ uv sync --reinstall-package infer-ts
 
 echo ""
 echo "==> Running Python tests..."
-uv run pytest python/tests/ -v
+uv run pytest python/tests/ -v -m "not slow"
