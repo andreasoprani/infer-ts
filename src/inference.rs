@@ -152,6 +152,39 @@ pub fn infer<'a>(
     state.finish()
 }
 
+// ─── Date Preference Filter ───────────────────────────────────────────────────
+
+/// When both EU and US slash variants survive inference, keep only the preferred one.
+///
+/// If the data itself disambiguated (only one slash family present), the
+/// preference is not applied — data always wins over preference.
+pub fn apply_date_preference(formats: Vec<Format>, prefer_eu: bool) -> Vec<Format> {
+    use crate::formats::DateFmt;
+
+    fn slash_date(f: &Format) -> Option<DateFmt> {
+        match f {
+            Format::Date(df) => Some(df.date),
+            Format::DateTime(dtf) => Some(dtf.date),
+            Format::Unix(_) => None,
+        }
+    }
+    fn is_eu(d: DateFmt) -> bool { matches!(d, DateFmt::SlashEU | DateFmt::SlashEUShort) }
+    fn is_us(d: DateFmt) -> bool { matches!(d, DateFmt::SlashUS | DateFmt::SlashUSShort) }
+
+    let has_eu = formats.iter().any(|f| slash_date(f).is_some_and(is_eu));
+    let has_us = formats.iter().any(|f| slash_date(f).is_some_and(is_us));
+
+    if !(has_eu && has_us) {
+        return formats;
+    }
+
+    formats.into_iter().filter(|f| match slash_date(f) {
+        Some(d) if is_eu(d) => prefer_eu,
+        Some(d) if is_us(d) => !prefer_eu,
+        _ => true,
+    }).collect()
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

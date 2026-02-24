@@ -162,6 +162,22 @@ class TestErrors:
         with pytest.raises(Exception, match="multiple timestamp formats"):
             df.with_columns(pl.col("ts").infer_ts.to_datetime())
 
+    def test_date_preference_eu(self):
+        df = pl.DataFrame({"ts": ["01/02/2024", "03/04/2024"]})
+        result = df.with_columns(
+            pl.col("ts").infer_ts.to_datetime(raise_on_multiple=False, date_preference="eu")
+        )
+        assert result["ts"].dtype == pl.Datetime
+        assert _dt(result["ts"], 0).month == 2  # EU: 01/02 → Feb
+
+    def test_date_preference_us(self):
+        df = pl.DataFrame({"ts": ["01/02/2024", "03/04/2024"]})
+        result = df.with_columns(
+            pl.col("ts").infer_ts.to_datetime(raise_on_multiple=False, date_preference="us")
+        )
+        assert result["ts"].dtype == pl.Datetime
+        assert _dt(result["ts"], 0).month == 1  # US: 01/02 → Jan
+
     def test_no_raise_on_multiple(self):
         df = pl.DataFrame({"ts": ["01/02/2024", "03/04/2024"]})
         result = df.with_columns(pl.col("ts").infer_ts.to_datetime(raise_on_multiple=False))

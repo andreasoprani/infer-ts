@@ -10,10 +10,10 @@ Datetime formats are detected **compositionally**: date + separator (`T` or spac
 | Name | Example | Polars fragment |
 | ---- | ------- | --------------- |
 | ISO 8601 | `2024-01-15` | `%Y-%m-%d` |
-| US slash, 4-digit year | `01/15/2024` | `%m/%d/%Y` |
 | EU slash, 4-digit year | `15/01/2024` | `%d/%m/%Y` |
-| US slash, 2-digit year | `01/15/24` | `%m/%d/%y` |
+| US slash, 4-digit year | `01/15/2024` | `%m/%d/%Y` |
 | EU slash, 2-digit year | `15/01/24` | `%d/%m/%y` |
+| US slash, 2-digit year | `01/15/24` | `%m/%d/%y` |
 | EU dot, 4-digit year | `15.01.2024` | `%d.%m.%Y` |
 | EU dot, 2-digit year | `15.01.24` | `%d.%m.%y` |
 | Compact | `20240115` | `%Y%m%d` |

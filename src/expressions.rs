@@ -17,6 +17,7 @@ use crate::inference;
 struct ToDatetimeKwargs {
     exhaustive: bool,
     raise_on_multiple: bool,
+    date_preference: String,
 }
 
 // ─── output type funcs ──────────────────────────────────────────────────────
@@ -91,6 +92,11 @@ fn to_datetime_impl(
             fmt_strs
         );
     }
+
+    let formats = {
+        let prefer_eu = kwargs.date_preference != "us";
+        inference::apply_date_preference(formats, prefer_eu)
+    };
 
     let fmt = formats[0];
 

@@ -23,7 +23,6 @@ pub use date::DateFormat;
 pub use datetime::DateTimeFormat;
 pub use unix::UnixFormat;
 
-#[cfg(test)]
 pub use date::DateFmt;
 #[cfg(test)]
 pub use datetime::TimeComponent;

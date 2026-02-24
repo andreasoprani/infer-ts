@@ -36,6 +36,19 @@ _UNIX_SOURCE_EXP: dict[str, int] = {
 
 _TIME_UNIT_EXP: dict[str, int] = {"ms": 3, "us": 6, "ns": 9}
 
+_EU_SLASH = "%d/%m/"
+_US_SLASH = "%m/%d/"
+
+
+def _apply_date_preference(fmts: list[str], date_preference: str) -> list[str]:
+    """When both EU and US slash formats are present, keep only the preferred one."""
+    has_eu = any(_EU_SLASH in f for f in fmts)
+    has_us = any(_US_SLASH in f for f in fmts)
+    if not (has_eu and has_us):
+        return fmts
+    drop = _US_SLASH if date_preference != "us" else _EU_SLASH
+    return [f for f in fmts if drop not in f]
+
 
 def infer_format(
     values: pl.Series | Iterable[str | None],
@@ -61,6 +74,7 @@ def to_datetime(
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
+    date_preference: Literal["eu", "us"] = "eu",
 ) -> pl.Series:
     """Infer timestamp format and cast a string Series to Datetime.
 
@@ -71,6 +85,12 @@ def to_datetime(
             when multiple formats match.  If *False*, use the first match.
         time_unit: Output datetime time unit — ``"ns"``, ``"us"``, or ``"ms"``.
             Defaults to ``"us"`` (microseconds).
+        date_preference: Which slash date convention to prefer when the data is
+            ambiguous (i.e. all day/month values ≤ 12 so both ``DD/MM`` and
+            ``MM/DD`` are plausible).  One of ``"eu"`` (default) or ``"us"``.
+            **Only takes effect when** ``raise_on_multiple=False`` — with the
+            default strict mode the ambiguity is still reported as an error.
+            Has no effect when the data unambiguously resolves to one format.
 
     Returns:
         A Polars Series with ``Datetime(time_unit)`` dtype.
@@ -94,6 +114,7 @@ def to_datetime(
             + "Pass raise_on_multiple=False to use the first match."
         )
 
+    fmts = _apply_date_preference(fmts, date_preference)
     fmt = fmts[0]
     if fmt in _UNIX_SOURCE_EXP:
         diff = _TIME_UNIT_EXP[time_unit] - _UNIX_SOURCE_EXP[fmt]

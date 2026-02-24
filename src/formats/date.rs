@@ -7,14 +7,14 @@ use chrono::NaiveDate;
 pub enum DateFmt {
     /// `YYYY-MM-DD` (ISO 8601)
     Iso,
-    /// `MM/DD/YYYY` (US convention)
-    SlashUS,
     /// `DD/MM/YYYY` (EU convention)
     SlashEU,
-    /// `MM/DD/YY` (US convention, 2-digit year)
-    SlashUSShort,
+    /// `MM/DD/YYYY` (US convention)
+    SlashUS,
     /// `DD/MM/YY` (EU convention, 2-digit year)
     SlashEUShort,
+    /// `MM/DD/YY` (US convention, 2-digit year)
+    SlashUSShort,
     /// `DD.MM.YYYY` (European convention, dot-separated)
     DotEU,
     /// `DD.MM.YY` (European convention, dot-separated, 2-digit year)
@@ -38,10 +38,10 @@ impl DateFmt {
     pub(super) const fn all() -> &'static [DateFmt] {
         &[
             DateFmt::Iso,
-            DateFmt::SlashUS,
             DateFmt::SlashEU,
-            DateFmt::SlashUSShort,
+            DateFmt::SlashUS,
             DateFmt::SlashEUShort,
+            DateFmt::SlashUSShort,
             DateFmt::DotEU,
             DateFmt::DotEUShort,
             DateFmt::Compact,

@@ -27,6 +27,7 @@ def to_datetime_expr(
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
+    date_preference: Literal["eu", "us"] = "eu",
 ) -> pl.Expr:
     """Infer timestamp format and cast a string column to Datetime.
 
@@ -35,9 +36,16 @@ def to_datetime_expr(
     Args:
         expr: A Polars expression producing a String column.
         exhaustive: If *True*, check all values during inference.
-        raise_on_multiple: If *True*, error when multiple formats match.
+        raise_on_multiple: If *True* (default), error when multiple formats
+            match.  If *False*, use the first match.
         time_unit: Output datetime time unit. One of ``"ns"``, ``"us"``,
             ``"ms"``. Defaults to ``"us"`` (microseconds).
+        date_preference: Which slash date convention to prefer when the data is
+            ambiguous (i.e. all day/month values ≤ 12 so both ``DD/MM`` and
+            ``MM/DD`` are plausible).  One of ``"eu"`` (default) or ``"us"``.
+            **Only takes effect when** ``raise_on_multiple=False`` — with the
+            default strict mode the ambiguity is still reported as an error.
+            Has no effect when the data unambiguously resolves to one format.
 
     Returns:
         A Polars expression producing a Datetime column.
@@ -52,5 +60,6 @@ def to_datetime_expr(
         kwargs={
             "exhaustive": exhaustive,
             "raise_on_multiple": raise_on_multiple,
+            "date_preference": date_preference,
         },
     )

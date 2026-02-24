@@ -729,11 +729,24 @@ class TestToDatetimeAPI:
             _ = infer_ts.to_datetime(s)
 
     def test_ambiguous_raises(self):
-        """ValueError on ambiguous formats with raise_on_multiple=True."""
-        # 01/02/2024 is ambiguous: could be US (Jan 2) or EU (1 Feb)
+        """ValueError on ambiguous formats with raise_on_multiple=True (default)."""
         s = pl.Series("ts", ["01/02/2024", "03/04/2024"])
         with pytest.raises(ValueError, match="Multiple timestamp formats"):
             _ = infer_ts.to_datetime(s)
+
+    def test_date_preference_eu(self):
+        """date_preference='eu' selects EU interpretation when raise_on_multiple=False."""
+        s = pl.Series("ts", ["01/02/2024", "03/04/2024"])
+        result = infer_ts.to_datetime(s, raise_on_multiple=False, date_preference="eu")
+        assert result.dtype == pl.Datetime
+        assert _dt(result, 0).month == 2  # EU: 01/02 → Feb
+
+    def test_date_preference_us(self):
+        """date_preference='us' selects US interpretation when raise_on_multiple=False."""
+        s = pl.Series("ts", ["01/02/2024", "03/04/2024"])
+        result = infer_ts.to_datetime(s, raise_on_multiple=False, date_preference="us")
+        assert result.dtype == pl.Datetime
+        assert _dt(result, 0).month == 1  # US: 01/02 → Jan
 
     def test_ambiguous_first_match(self):
         """Use first match when raise_on_multiple=False."""

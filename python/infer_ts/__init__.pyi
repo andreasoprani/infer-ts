@@ -18,6 +18,7 @@ def to_datetime(
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
+    date_preference: Literal["eu", "us"] = "eu",
 ) -> pl.Series: ...
 def to_datetime_expr(
     expr: pl.Expr,
@@ -25,6 +26,7 @@ def to_datetime_expr(
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
+    date_preference: Literal["eu", "us"] = "eu",
 ) -> pl.Expr: ...
 
 class ExprInferTsNamespace:
@@ -35,4 +37,5 @@ class ExprInferTsNamespace:
         exhaustive: bool = False,
         raise_on_multiple: bool = True,
         time_unit: Literal["ns", "us", "ms"] = "us",
+        date_preference: Literal["eu", "us"] = "eu",
     ) -> pl.Expr: ...
