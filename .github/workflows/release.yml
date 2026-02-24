@@ -38,7 +38,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.target }}
+          name: wheels-${{ matrix.runner }}-${{ matrix.target }}
           path: dist
 
   build-sdist:
