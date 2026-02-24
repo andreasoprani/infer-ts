@@ -7,14 +7,11 @@ import polars as pl
 
 __version__: str
 
-
 def infer_format(
     values: pl.Series | Iterable[str | None],
     *,
     exhaustive: bool = False,
 ) -> list[str]: ...
-
-
 @overload
 def to_datetime(
     values: pl.Series,
@@ -41,7 +38,6 @@ def to_datetime(
     time_unit: Literal["ns", "us", "ms"] = ...,
     date_preference: Literal["eu", "us"] = ...,
 ) -> pl.Series | pl.Expr: ...
-
 
 class ExprInferTsNamespace:
     def __init__(self, expr: pl.Expr) -> None: ...
