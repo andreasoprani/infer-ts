@@ -1,6 +1,6 @@
 [package]
 name = "infer-ts"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Infer timestamp formats from string columns using CSP constraint elimination"
 license = "MIT"
@@ -10,9 +10,10 @@ name = "infer_ts"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.27", features = ["macros", "abi3", "abi3-py39"] }
+pyo3 = { version = "0.27", features = ["macros", "abi3", "abi3-py310"] }
 pyo3-polars = { version = "0.26", default-features = false, features = ["derive"] }
-polars = { version = "0.53", default-features = false, features = ["temporal", "strings"] }
+polars = { version = "0.53", default-features = false, features = ["temporal", "strings", "timezones"] }
+polars-time = { version = "0.53", features = ["timezones"] }
 serde = { version = "1", features = ["derive"] }
 chrono = "0.4"
 

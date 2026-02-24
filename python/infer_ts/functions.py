@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 PLUGIN_PATH = Path(__file__).parent
 
-__all__ = ["to_datetime_expr"]
+__all__: list[str] = []
 
 
 def to_datetime_expr(

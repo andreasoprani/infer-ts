@@ -7,7 +7,7 @@ wrapper that transparently handles both strftime and ``@unix_*`` formats.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from ._infer_ts import __version__
 from ._infer_ts import infer_format_iter as _infer_format_iter
@@ -15,39 +15,24 @@ from ._infer_ts import infer_format_series as _infer_format_series
 
 if TYPE_CHECKING:
     import polars as pl
+    from polars._typing import IntoExprColumn
 
 import infer_ts.namespace  # noqa: F401  — registers the expr namespace  # pyright: ignore[reportUnusedImport]
-from infer_ts.functions import to_datetime_expr
+from infer_ts.functions import to_datetime_expr as _to_datetime_expr
+
+
+class _KwArgs(TypedDict):
+    exhaustive: bool
+    raise_on_multiple: bool
+    time_unit: Literal["ns", "us", "ms"]
+    date_preference: Literal["eu", "us"]
+
 
 __all__ = [
     "__version__",
     "infer_format",
     "to_datetime",
-    "to_datetime_expr",
 ]
-
-# Source precision exponent (power of 10 relative to seconds) for each unix marker.
-_UNIX_SOURCE_EXP: dict[str, int] = {
-    "@unix_seconds": 0,
-    "@unix_ms": 3,
-    "@unix_us": 6,
-    "@unix_ns": 9,
-}
-
-_TIME_UNIT_EXP: dict[str, int] = {"ms": 3, "us": 6, "ns": 9}
-
-_EU_SLASH = "%d/%m/"
-_US_SLASH = "%m/%d/"
-
-
-def _apply_date_preference(fmts: list[str], date_preference: str) -> list[str]:
-    """When both EU and US slash formats are present, keep only the preferred one."""
-    has_eu = any(_EU_SLASH in f for f in fmts)
-    has_us = any(_US_SLASH in f for f in fmts)
-    if not (has_eu and has_us):
-        return fmts
-    drop = _US_SLASH if date_preference != "us" else _EU_SLASH
-    return [f for f in fmts if drop not in f]
 
 
 def infer_format(
@@ -69,20 +54,25 @@ def infer_format(
 
 
 def to_datetime(
-    series: pl.Series,
+    values: IntoExprColumn,
     *,
     exhaustive: bool = False,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
     date_preference: Literal["eu", "us"] = "eu",
-) -> pl.Series:
-    """Infer timestamp format and cast a string Series to Datetime.
+) -> pl.Series | pl.Expr:
+    """Infer timestamp format and cast a string column to Datetime.
+
+    Accepts a :class:`~polars.Series`, a :class:`~polars.Expr`, or a column
+    name string.  When given a Series the result is a Series; otherwise a
+    Polars expression is returned (suitable for use inside
+    :meth:`~polars.DataFrame.with_columns` and lazy frames).
 
     Args:
-        series: A Polars Series of strings to parse.
+        values: A Polars Series, expression, or column name string.
         exhaustive: If *True*, check all values during inference.
-        raise_on_multiple: If *True* (default), raise :class:`ValueError`
-            when multiple formats match.  If *False*, use the first match.
+        raise_on_multiple: If *True* (default), raise an error when multiple
+            formats match.  If *False*, use the first match.
         time_unit: Output datetime time unit — ``"ns"``, ``"us"``, or ``"ms"``.
             Defaults to ``"us"`` (microseconds).
         date_preference: Which slash date convention to prefer when the data is
@@ -93,40 +83,28 @@ def to_datetime(
             Has no effect when the data unambiguously resolves to one format.
 
     Returns:
-        A Polars Series with ``Datetime(time_unit)`` dtype.
+        A :class:`~polars.Series` with ``Datetime(time_unit)`` dtype when
+        *values* is a Series; a :class:`~polars.Expr` otherwise.
 
     Raises:
-        ValueError: No format matches, or (if *raise_on_multiple*) ambiguous.
+        polars.exceptions.ComputeError: No format matches, or (if *raise_on_multiple*)
+            multiple formats match.
     """
     import polars as pl
 
-    fmts = _infer_format_series(series, exhaustive=exhaustive)
-
-    if not fmts:
-        # All-null/empty series: return an all-null Datetime series
-        if series.null_count() == len(series):
-            return series.cast(pl.Datetime(time_unit))
-        raise ValueError("No timestamp format matches the values in the series")
-
-    if len(fmts) > 1 and raise_on_multiple:
-        raise ValueError(
-            f"Multiple timestamp formats match the values: {fmts}. "
-            + "Pass raise_on_multiple=False to use the first match."
-        )
-
-    fmts = _apply_date_preference(fmts, date_preference)
-    fmt = fmts[0]
-    if fmt in _UNIX_SOURCE_EXP:
-        diff = _TIME_UNIT_EXP[time_unit] - _UNIX_SOURCE_EXP[fmt]
-        ints = series.cast(pl.Int64)
-        if diff > 0:
-            factor = 10**diff
-            overflow = ints.abs() > (2**63 - 1) // factor
-            scaled = (ints * factor).set(overflow, None)
-        elif diff < 0:
-            scaled = ints // 10**-diff
-        else:
-            scaled = ints
-        return scaled.cast(pl.Datetime(time_unit))
-
-    return series.str.to_datetime(format=fmt, time_unit=time_unit)
+    kw: _KwArgs = {
+        "exhaustive": exhaustive,
+        "raise_on_multiple": raise_on_multiple,
+        "time_unit": time_unit,
+        "date_preference": date_preference,
+    }
+    match values:
+        case str():
+            return _to_datetime_expr(pl.col(values), **kw)
+        case pl.Expr():
+            return _to_datetime_expr(values, **kw)
+        case pl.Series():
+            # Delegate to the expression plugin so both paths share the same Rust code.
+            return (
+                values.to_frame().select(_to_datetime_expr(pl.col(values.name), **kw)).to_series()
+            )

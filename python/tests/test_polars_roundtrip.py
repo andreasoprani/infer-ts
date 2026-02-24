@@ -723,15 +723,15 @@ class TestToDatetimeAPI:
     """Tests for the to_datetime() convenience wrapper API."""
 
     def test_no_match_raises(self):
-        """ValueError when no format matches."""
+        """ComputeError when no format matches."""
         s = pl.Series("ts", ["not a timestamp"])
-        with pytest.raises(ValueError, match="No timestamp format"):
+        with pytest.raises(pl.exceptions.ComputeError, match="no timestamp format"):
             _ = infer_ts.to_datetime(s)
 
     def test_ambiguous_raises(self):
-        """ValueError on ambiguous formats with raise_on_multiple=True (default)."""
+        """ComputeError on ambiguous formats with raise_on_multiple=True (default)."""
         s = pl.Series("ts", ["01/02/2024", "03/04/2024"])
-        with pytest.raises(ValueError, match="Multiple timestamp formats"):
+        with pytest.raises(pl.exceptions.ComputeError, match="multiple timestamp formats"):
             _ = infer_ts.to_datetime(s)
 
     def test_date_preference_eu(self):
@@ -892,6 +892,61 @@ class TestSpacedTimezone:
 
         fmts = infer_ts.infer_format(["2024-01-15T10:30:00 +0530"])
         assert fmts == ["%Y-%m-%dT%H:%M:%S %z"]
+
+
+# ─── Timezone handling ───────────────────────────────────────────────────────
+
+
+class TestTimezoneHandling:
+    """Regression tests for tz-offset inputs (bug: tz was silently dropped)."""
+
+    def test_offset_series_dtype_is_utc(self):
+        """Series path: tz-offset input → datetime[μs, UTC]."""
+        s = pl.Series("ts", ["2026-02-24T10:00:00+01:00"])
+        result = infer_ts.to_datetime(s)
+        assert result.dtype == pl.Datetime("us", "UTC")
+
+    def test_offset_series_value_is_utc_converted(self):
+        """Series path: +01:00 offset → value is wall-clock minus 1 hour."""
+        s = pl.Series("ts", ["2026-02-24T10:00:00+01:00"])
+        result = infer_ts.to_datetime(s)
+        v = _dt(result, 0)
+        assert (v.year, v.month, v.day, v.hour, v.minute) == (2026, 2, 24, 9, 0)
+
+    def test_offset_expr_dtype_is_utc(self):
+        """Expression plugin: tz-offset input → datetime[μs, UTC]."""
+        df = pl.DataFrame({"ts": ["2026-02-24T10:00:00+01:00"]})
+        result = df.with_columns(infer_ts.to_datetime("ts"))["ts"]
+        assert result.dtype == pl.Datetime("us", "UTC")
+
+    def test_offset_expr_value_is_utc_converted(self):
+        """Expression plugin: +01:00 offset → value is wall-clock minus 1 hour."""
+        df = pl.DataFrame({"ts": ["2026-02-24T10:00:00+01:00"]})
+        result = df.with_columns(infer_ts.to_datetime("ts"))["ts"]
+        v = _dt(result, 0)
+        assert (v.year, v.month, v.day, v.hour, v.minute) == (2026, 2, 24, 9, 0)
+
+    def test_compact_offset_expr(self):
+        """Compact offset (+0100) also converts correctly."""
+        df = pl.DataFrame({"ts": ["2026-02-24T10:00:00+0100"]})
+        result = df.with_columns(infer_ts.to_datetime("ts"))["ts"]
+        assert result.dtype == pl.Datetime("us", "UTC")
+        v = _dt(result, 0)
+        assert (v.hour, v.minute) == (9, 0)
+
+    def test_naive_unaffected(self):
+        """tz-naive inputs still produce timezone-naive datetime."""
+        df = pl.DataFrame({"ts": ["2026-02-24T10:00:00"]})
+        result = df.with_columns(infer_ts.to_datetime("ts"))["ts"]
+        assert result.dtype == pl.Datetime("us", None)
+
+    def test_series_and_expr_consistent(self):
+        """Series and expression paths return the same dtype and value."""
+        values = ["2026-02-24T10:00:00+01:00", "2026-06-15T08:30:00-05:00"]
+        series_result = infer_ts.to_datetime(pl.Series("ts", values))
+        expr_result = pl.DataFrame({"ts": values}).with_columns(infer_ts.to_datetime("ts"))["ts"]
+        assert series_result.dtype == expr_result.dtype
+        assert series_result.to_list() == expr_result.to_list()
 
 
 if __name__ == "__main__":

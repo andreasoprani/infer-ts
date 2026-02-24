@@ -92,14 +92,20 @@ import infer_ts
 
 df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
 
-# One-liner: infer format and cast to Datetime in a single call
+# Series → Series
 series = infer_ts.to_datetime(df["ts"])
 
-# Or as a Polars expression (works inside lazy frames too)
+# Column name → Expr  (works inside lazy frames too)
+df = df.with_columns(infer_ts.to_datetime("ts"))
+
+# Expr → Expr
+df = df.with_columns(infer_ts.to_datetime(pl.col("ts")))
+
+# Namespace style (equivalent to the Expr form above)
 df = df.with_columns(pl.col("ts").infer_ts.to_datetime())
 
 # Control the output time unit (default: "us")
-df = df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="ns"))
+df = df.with_columns(infer_ts.to_datetime("ts", time_unit="ns"))
 
 # Infer the format strings only (returns a list of all matching formats)
 fmts = infer_ts.infer_format(df["ts"])
@@ -124,7 +130,9 @@ fmts = infer_ts.infer_format(["01/02/2024", "03/04/2024"], exhaustive=True)
 print(fmts)  # ["%d/%m/%Y", "%m/%d/%Y"] - both US and EU formats match
 ```
 
-### Polars – string-based formats
+### Polars – using the inferred format directly
+
+If you need the format string itself (e.g. to pass to other tools), use `infer_format` and call `str.to_datetime` manually:
 
 ```python
 import polars as pl
@@ -140,7 +148,7 @@ df = df.with_columns(pl.col("ts").str.to_datetime(format=fmt))
 
 ### Polars – Unix epoch formats
 
-`infer_format` returns a `@`-prefixed marker for epoch columns (e.g. `@unix_seconds`, `@unix_ms`, `@unix_us`, `@unix_ns`). The `to_datetime` plugin and `to_datetime()` wrapper handle these automatically with correct integer scaling — no manual casting needed:
+`infer_format` returns a `@`-prefixed marker for epoch columns (e.g. `@unix_seconds`, `@unix_ms`, `@unix_us`, `@unix_ns`). `to_datetime` handles these automatically with correct integer scaling — no manual casting needed:
 
 ```python
 import polars as pl
@@ -148,11 +156,8 @@ import infer_ts
 
 df = pl.DataFrame({"ts": ["1705312200", "1705398600"]})
 
-# Plugin expression (works in lazy frames too):
-df = df.with_columns(pl.col("ts").infer_ts.to_datetime())
-
-# Or via the series API:
-result = infer_ts.to_datetime(df["ts"])
+df = df.with_columns(infer_ts.to_datetime("ts"))       # Expr form
+result = infer_ts.to_datetime(df["ts"])                # Series form
 ```
 
 ## Handling ambiguity

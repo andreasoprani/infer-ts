@@ -1,7 +1,7 @@
 """Tests for the Polars expression plugin.
 
 Covers both the namespace style (pl.col("ts").infer_ts.to_datetime()) and
-the functional style (infer_ts.to_datetime_expr("ts")).
+the functional style (infer_ts.to_datetime(pl.col("ts"))).
 """
 
 import polars as pl
@@ -147,7 +147,7 @@ class TestTimeUnit:
 
     def test_functional_time_unit_ns(self):
         df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
-        result = df.with_columns(infer_ts.to_datetime_expr(pl.col("ts"), time_unit="ns"))
+        result = df.with_columns(infer_ts.to_datetime(pl.col("ts"), time_unit="ns"))
         assert result["ts"].dtype == pl.Datetime("ns")
 
 
@@ -321,11 +321,11 @@ class TestUnixOverflow:
 
 
 class TestFunctionalStyle:
-    """infer_ts.to_datetime_expr() functional style."""
+    """infer_ts.to_datetime() with Expr and str inputs."""
 
     def test_to_datetime_expr(self):
         df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
-        result = df.with_columns(infer_ts.to_datetime_expr(pl.col("ts")))
+        result = df.with_columns(infer_ts.to_datetime(pl.col("ts")))
 
         assert result["ts"].dtype == pl.Datetime
         v = _dt(result["ts"], 0)
@@ -333,9 +333,17 @@ class TestFunctionalStyle:
 
     def test_to_datetime_expr_lazy(self):
         df = pl.LazyFrame({"ts": ["2024-01-15T10:30:00"]})
-        result = df.with_columns(infer_ts.to_datetime_expr(pl.col("ts"))).collect()
+        result = df.with_columns(infer_ts.to_datetime(pl.col("ts"))).collect()
 
         assert result["ts"].dtype == pl.Datetime
+
+    def test_to_datetime_str(self):
+        df = pl.DataFrame({"ts": ["2024-01-15T10:30:00", "2024-06-20T08:00:00"]})
+        result = df.with_columns(infer_ts.to_datetime("ts"))
+
+        assert result["ts"].dtype == pl.Datetime
+        v = _dt(result["ts"], 0)
+        assert (v.year, v.month, v.day) == (2024, 1, 15)
 
 
 # ─── Dot-separated EU and month-name formats ─────────────────────────────────

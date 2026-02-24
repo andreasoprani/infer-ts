@@ -8,7 +8,7 @@ use pyo3_polars::derive::polars_expr;
 use pyo3_polars::export::polars_core::utils::CustomIterTools;
 use serde::Deserialize;
 
-use crate::formats::{Format, UnixPrecision};
+use crate::formats::{Format, Timezone, UnixPrecision};
 use crate::inference;
 
 // ─── kwargs ─────────────────────────────────────────────────────────────────
@@ -106,12 +106,22 @@ fn to_datetime_impl(
 
     let polars_fmt = fmt.polars_format();
     let ambiguous = StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
+
+    // Numeric offset timezones (+HH:MM, ±HHMM) need tz_aware=true so polars
+    // converts the offset to UTC.  The literal-Z suffix is already UTC so it
+    // parses correctly without tz_aware.
+    let tz_aware = matches!(
+        fmt,
+        Format::DateTime(dtf)
+            if matches!(dtf.time.timezone, Some(Timezone::Offset) | Some(Timezone::OffsetCompact))
+    );
+
     let parsed = ca.as_datetime(
         Some(&polars_fmt),
         time_unit,
-        true,  // use_cache — key to matching native performance
-        false, // tz_aware
-        None,  // tz
+        true,     // use_cache — key to matching native performance
+        tz_aware,
+        None,     // tz
         &ambiguous,
     )?;
     Ok(parsed.into_series().with_name(name.clone()))
