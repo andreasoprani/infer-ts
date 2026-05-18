@@ -18,7 +18,6 @@ mod datetime;
 mod time;
 mod unix;
 
-
 pub use date::DateFormat;
 pub use datetime::DateTimeFormat;
 pub use unix::UnixFormat;
@@ -54,8 +53,14 @@ impl Format {
             return vec![];
         }
 
-        DateFormat::parse(value).into_iter().map(Format::Date)
-            .chain(DateTimeFormat::parse(value).into_iter().map(Format::DateTime))
+        DateFormat::parse(value)
+            .into_iter()
+            .map(Format::Date)
+            .chain(
+                DateTimeFormat::parse(value)
+                    .into_iter()
+                    .map(Format::DateTime),
+            )
             .chain(UnixFormat::parse(value).into_iter().map(Format::Unix))
             .collect()
     }
@@ -187,6 +192,21 @@ mod tests {
     #[test]
     fn iso8601_plain() {
         assert_only("2024-01-15T10:30:00", dt(Iso, T, Hms, None));
+    }
+
+    #[test]
+    fn iso8601_without_seconds() {
+        assert_only("2024-01-15T10:30", dt(Iso, T, Hm, None));
+    }
+
+    #[test]
+    fn iso8601_12h_without_seconds() {
+        assert_only("2024-01-15T10:30 PM", dt(Iso, T, Hm12, None));
+    }
+
+    #[test]
+    fn iso8601_12h_compact_without_seconds() {
+        assert_only("2024-01-15T10:30PM", dt(Iso, T, Hm12Compact, None));
     }
 
     #[test]
@@ -352,6 +372,11 @@ mod tests {
     }
 
     #[test]
+    fn date_iso_unpadded() {
+        assert_only("2024-1-5", date_only(Iso));
+    }
+
+    #[test]
     fn date_iso_leap_feb29() {
         assert_only("2024-02-29", date_only(Iso));
     }
@@ -379,6 +404,12 @@ mod tests {
     }
 
     #[test]
+    fn slash_unpadded_ambiguous_both_match() {
+        // 1/1/2024 → US and EU are both structurally valid.
+        assert_set("1/1/2024", &[date_only(SlashUS), date_only(SlashEU)]);
+    }
+
+    #[test]
     fn slash_us_only() {
         // day=15 > 12 kills EU (would need month=15)
         assert_only("01/15/2024", date_only(SlashUS));
@@ -393,6 +424,11 @@ mod tests {
     #[test]
     fn slash_us_datetime() {
         assert_only("01/15/2024 10:30:00", dt(SlashUS, Space, Hms, None));
+    }
+
+    #[test]
+    fn slash_us_unpadded_datetime_without_seconds() {
+        assert_only("1/15/2024 10:30", dt(SlashUS, Space, Hm, None));
     }
 
     #[test]
@@ -503,7 +539,7 @@ mod tests {
 
     #[test]
     fn truncated_iso() {
-        assert_none("2024-01-15T10:30");
+        assert_none("2024-01-15T10:");
     }
 
     #[test]
@@ -707,6 +743,14 @@ mod tests {
     }
 
     #[test]
+    fn slash_short_unpadded_ambiguous_both_match() {
+        assert_set(
+            "1/1/26",
+            &[date_only(SlashUSShort), date_only(SlashEUShort)],
+        );
+    }
+
+    #[test]
     fn slash_short_us_datetime() {
         assert_only("01/15/24 10:30:00", dt(SlashUSShort, Space, Hms, None));
     }
@@ -766,6 +810,11 @@ mod tests {
     #[test]
     fn dot_eu_date() {
         assert_only("15.01.2024", date_only(DotEU));
+    }
+
+    #[test]
+    fn dot_eu_unpadded_date() {
+        assert_only("1.1.2024", date_only(DotEU));
     }
 
     #[test]
@@ -1169,16 +1218,29 @@ mod tests {
         out.push_str("| Name | Example | Polars fragment |\n");
         out.push_str("| ---- | ------- | --------------- |\n");
         for fmt in date::DateFmt::all() {
-            out.push_str(&format!("| {} | `{}` | `{}` |\n", fmt.name(), fmt.example(), fmt.polars_date()));
+            out.push_str(&format!(
+                "| {} | `{}` | `{}` |\n",
+                fmt.name(),
+                fmt.example(),
+                fmt.polars_date()
+            ));
         }
-        out.push_str("\n2-digit years are expanded using the POSIX convention: 00\u{2013}68 \u{2192} 2000\u{2013}2068, 69\u{2013}99 \u{2192} 1969\u{2013}1999.\n\n");
+        out.push_str(
+            "\nNumeric days and months may omit leading zeroes (e.g. `1/1/26`, `2024-1-5`).\n\n",
+        );
+        out.push_str("2-digit years are expanded using the POSIX convention: 00\u{2013}68 \u{2192} 2000\u{2013}2068, 69\u{2013}99 \u{2192} 1969\u{2013}1999.\n\n");
 
         // ── Time patterns ────────────────────────────────────────────────────
         out.push_str("## Time patterns\n\n");
         out.push_str("| Name | Example | Polars fragment |\n");
         out.push_str("| ---- | ------- | --------------- |\n");
         for fmt in time::TimeFmt::all() {
-            out.push_str(&format!("| {} | `{}` | `{}` |\n", fmt.name(), fmt.example(), fmt.polars_time()));
+            out.push_str(&format!(
+                "| {} | `{}` | `{}` |\n",
+                fmt.name(),
+                fmt.example(),
+                fmt.polars_time()
+            ));
         }
         out.push_str("\nDate and time are joined by `T` (ISO 8601 style) or a single space.\n\n");
 
@@ -1187,9 +1249,16 @@ mod tests {
         out.push_str("| Name | Example | Polars fragment |\n");
         out.push_str("| ---- | ------- | --------------- |\n");
         for tz in time::Timezone::all() {
-            out.push_str(&format!("| {} | `{}` | `{}` |\n", tz.name(), tz.example(), tz.polars_tz()));
+            out.push_str(&format!(
+                "| {} | `{}` | `{}` |\n",
+                tz.name(),
+                tz.example(),
+                tz.polars_tz()
+            ));
         }
-        out.push_str("\nA space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).\n\n");
+        out.push_str(
+            "\nA space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).\n\n",
+        );
 
         // ── Unix epoch formats ───────────────────────────────────────────────
         out.push_str("## Unix epoch formats\n\n");
@@ -1198,7 +1267,12 @@ mod tests {
         out.push_str("| ---- | ------- | ------ |\n");
         for p in unix::UnixPrecision::all() {
             let marker = unix::UnixFormat { precision: *p }.polars_format();
-            out.push_str(&format!("| Unix {} | `{}` | `{}` |\n", p.name(), p.example(), marker));
+            out.push_str(&format!(
+                "| Unix {} | `{}` | `{}` |\n",
+                p.name(),
+                p.example(),
+                marker
+            ));
         }
         out.push('\n');
 
@@ -1208,7 +1282,12 @@ mod tests {
         out.push_str("| Variant | Digit count | Approx. date range |\n");
         out.push_str("| ------- | ----------- | ------------------ |\n");
         for p in unix::UnixPrecision::all() {
-            out.push_str(&format!("| Unix {} | {} | {} |\n", p.name(), p.digits(), p.date_range()));
+            out.push_str(&format!(
+                "| Unix {} | {} | {} |\n",
+                p.name(),
+                p.digits(),
+                p.date_range()
+            ));
         }
         out.push_str("\nValues with 1\u{2013}8 digits do not match any Unix variant; 8-digit numeric strings are handled exclusively by the compact date format (if they form a valid date).\n");
 
@@ -1282,8 +1361,7 @@ mod tests {
         let actual = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
         assert_eq!(
-            actual,
-            expected,
+            actual, expected,
             "FORMATS.md is out of date — run `cargo test -- --ignored dump_formats` to regenerate"
         );
     }

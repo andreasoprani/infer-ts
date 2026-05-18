@@ -12,12 +12,18 @@ pub enum Separator {
 /// Time format within a standard timestamp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TimeFmt {
+    /// `HH:MM`
+    Hm,
     /// `HH:MM:SS`
     Hms,
     /// `HH:MM:SS.f` (1-9 fractional digits)
     HmsFrac,
     /// `HHMMSS` (compact, no colons)
     HmsCompact,
+    /// `H:MM AM/PM` (12-hour, 1-2 digit hour, space before AM/PM)
+    Hm12,
+    /// `H:MMAM/PM` (12-hour, 1-2 digit hour, no space before AM/PM)
+    Hm12Compact,
     /// `H:MM:SS AM/PM` (12-hour, 1-2 digit hour, space before AM/PM)
     Hms12,
     /// `H:MM:SSAM/PM` (12-hour, 1-2 digit hour, no space before AM/PM)
@@ -51,9 +57,12 @@ impl TimeFmt {
     /// Polars time fragment.
     pub(super) fn polars_time(&self) -> &'static str {
         match self {
+            TimeFmt::Hm => "%H:%M",
             TimeFmt::Hms => "%H:%M:%S",
             TimeFmt::HmsFrac => "%H:%M:%S%.f",
             TimeFmt::HmsCompact => "%H%M%S",
+            TimeFmt::Hm12 => "%I:%M %p",
+            TimeFmt::Hm12Compact => "%I:%M%p",
             TimeFmt::Hms12 => "%I:%M:%S %p",
             TimeFmt::Hms12Compact => "%I:%M:%S%p",
         }
@@ -72,6 +81,19 @@ impl Timezone {
 }
 
 // ─── Parsing Primitives ─────────────────────────────────────────────────────
+
+/// Validate an `HH:MM` string (exactly 5 bytes).
+fn parse_hm(s: &str) -> Option<()> {
+    if s.len() != 5 || s.as_bytes()[2] != b':' {
+        return None;
+    }
+    let h: u32 = s[0..2].parse().ok()?;
+    let m: u32 = s[3..5].parse().ok()?;
+    if h > 23 || m > 59 {
+        return None;
+    }
+    Some(())
+}
 
 /// Validate an `HH:MM:SS` string (exactly 8 bytes).
 fn parse_hms(s: &str) -> Option<()> {
@@ -115,11 +137,11 @@ fn parse_tz_offset(s: &str) -> Option<(usize, bool)> {
 
 /// Parse a 12-hour time with AM/PM suffix (case-insensitive).
 ///
-/// When `space_before_ampm` is `true`, expects `H:MM:SS AM` / `HH:MM:SS PM`.
-/// When `false`, expects `H:MM:SSAM` / `HH:MM:SSPM` (no space).
+/// When `space_before_ampm` is `true`, expects `H:MM AM` / `HH:MM:SS PM`.
+/// When `false`, expects `H:MMAM` / `HH:MM:SSPM` (no space).
 ///
 /// Returns the number of bytes consumed on success, or `None` on failure.
-fn parse_hms12(s: &str, space_before_ampm: bool) -> Option<usize> {
+fn parse_12h(s: &str, space_before_ampm: bool, with_seconds: bool) -> Option<usize> {
     let b = s.as_bytes();
     let colon1 = if b.len() > 1 && b[1] == b':' {
         1
@@ -135,16 +157,26 @@ fn parse_hms12(s: &str, space_before_ampm: bool) -> Option<usize> {
     }
 
     let rest = &s[colon1..];
-    if rest.len() < 6 || rest.as_bytes()[0] != b':' || rest.as_bytes()[3] != b':' {
+    if rest.len() < 3 || rest.as_bytes()[0] != b':' {
         return None;
     }
     let m: u32 = rest[1..3].parse().ok()?;
-    let sec: u32 = rest[4..6].parse().ok()?;
-    if m > 59 || sec > 59 {
+    if m > 59 {
         return None;
     }
 
-    let suffix_start = colon1 + 6;
+    let suffix_start = if with_seconds {
+        if rest.len() < 6 || rest.as_bytes()[3] != b':' {
+            return None;
+        }
+        let sec: u32 = rest[4..6].parse().ok()?;
+        if sec > 59 {
+            return None;
+        }
+        colon1 + 6
+    } else {
+        colon1 + 3
+    };
     if space_before_ampm {
         if s.len() < suffix_start + 3 || s.as_bytes()[suffix_start] != b' ' {
             return None;
@@ -208,6 +240,13 @@ pub(super) fn parse_frac(s: &str) -> Option<(usize, &str)> {
 /// Returns the remaining (unconsumed) string on success.
 pub(super) fn parse_time(s: &str, fmt: TimeFmt) -> Option<&str> {
     match fmt {
+        TimeFmt::Hm => {
+            if s.len() < 5 {
+                return None;
+            }
+            parse_hm(&s[..5])?;
+            Some(&s[5..])
+        }
         TimeFmt::Hms => {
             if s.len() < 8 {
                 return None;
@@ -243,12 +282,20 @@ pub(super) fn parse_time(s: &str, fmt: TimeFmt) -> Option<&str> {
             }
             Some(&s[6..])
         }
+        TimeFmt::Hm12 => {
+            let consumed = parse_12h(s, true, false)?;
+            Some(&s[consumed..])
+        }
+        TimeFmt::Hm12Compact => {
+            let consumed = parse_12h(s, false, false)?;
+            Some(&s[consumed..])
+        }
         TimeFmt::Hms12 => {
-            let consumed = parse_hms12(s, true)?;
+            let consumed = parse_12h(s, true, true)?;
             Some(&s[consumed..])
         }
         TimeFmt::Hms12Compact => {
-            let consumed = parse_hms12(s, false)?;
+            let consumed = parse_12h(s, false, true)?;
             Some(&s[consumed..])
         }
     }
@@ -288,9 +335,12 @@ impl TimeFmt {
     /// All time formats, in definition order.
     pub(super) const fn all() -> &'static [TimeFmt] {
         &[
+            TimeFmt::Hm,
             TimeFmt::Hms,
             TimeFmt::HmsFrac,
             TimeFmt::HmsCompact,
+            TimeFmt::Hm12,
+            TimeFmt::Hm12Compact,
             TimeFmt::Hms12,
             TimeFmt::Hms12Compact,
         ]
@@ -299,9 +349,12 @@ impl TimeFmt {
     /// Human-readable name for documentation tables.
     pub(super) fn name(&self) -> &'static str {
         match self {
+            TimeFmt::Hm => "24-hour, no seconds",
             TimeFmt::Hms => "24-hour",
             TimeFmt::HmsFrac => "24-hour + fractional seconds",
             TimeFmt::HmsCompact => "24-hour compact",
+            TimeFmt::Hm12 => "12-hour AM/PM, no seconds",
+            TimeFmt::Hm12Compact => "12-hour AM/PM compact, no seconds",
             TimeFmt::Hms12 => "12-hour AM/PM",
             TimeFmt::Hms12Compact => "12-hour AM/PM compact",
         }
@@ -315,7 +368,9 @@ impl TimeFmt {
         use chrono::NaiveTime;
         let t = match self {
             TimeFmt::HmsFrac => NaiveTime::from_hms_micro_opt(10, 30, 0, 123456).unwrap(),
-            TimeFmt::Hms12 | TimeFmt::Hms12Compact => NaiveTime::from_hms_opt(22, 30, 0).unwrap(),
+            TimeFmt::Hm12 | TimeFmt::Hm12Compact | TimeFmt::Hms12 | TimeFmt::Hms12Compact => {
+                NaiveTime::from_hms_opt(22, 30, 0).unwrap()
+            }
             _ => NaiveTime::from_hms_opt(10, 30, 0).unwrap(),
         };
         t.format(self.polars_time()).to_string()
@@ -348,12 +403,11 @@ impl Timezone {
             Timezone::Utc => "Z".to_string(),
             Timezone::Offset | Timezone::OffsetCompact => {
                 let offset = FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap();
-                let dt: chrono::DateTime<FixedOffset> = offset.from_utc_datetime(
-                    &NaiveDateTime::new(
+                let dt: chrono::DateTime<FixedOffset> =
+                    offset.from_utc_datetime(&NaiveDateTime::new(
                         NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
                         NaiveTime::from_hms_opt(10, 30, 0).unwrap(),
-                    ),
-                );
+                    ));
                 dt.format(self.polars_tz()).to_string()
             }
         }

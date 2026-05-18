@@ -21,7 +21,6 @@ impl UnixPrecision {
             UnixPrecision::Nanoseconds,
         ]
     }
-
 }
 
 #[cfg(test)]

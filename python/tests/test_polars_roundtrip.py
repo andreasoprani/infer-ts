@@ -34,6 +34,23 @@ class TestISO8601:
         assert v.month == 1
         assert v.day == 15
 
+    def test_iso8601_without_seconds(self):
+        s = pl.Series("ts", ["2024-01-15T10:30", "2024-06-20T08:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        v = _dt(result, 0)
+        assert v.hour == 10
+        assert v.minute == 30
+        assert v.second == 0
+
+    def test_iso8601_unpadded_date_without_seconds(self):
+        s = pl.Series("ts", ["2024-1-15T10:30", "2024-6-20T08:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert _dt(result, 0).month == 1
+
     def test_iso8601_utc(self):
         s = pl.Series("ts", ["2024-01-15T10:30:00Z", "2024-06-20T08:00:00Z"])
         result = infer_ts.to_datetime(s)
@@ -180,6 +197,16 @@ class TestSlashDates:
         assert v.month == 1
         assert v.day == 15
 
+    def test_us_slash_date_unpadded(self):
+        # day > 12 ensures unambiguous US format; month may omit leading zero
+        s = pl.Series("ts", ["1/15/2024", "6/20/2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
+
     def test_eu_slash_date(self):
         # first component > 12 ensures unambiguous EU format
         s = pl.Series("ts", ["15/01/2024", "20/06/2024"])
@@ -187,6 +214,16 @@ class TestSlashDates:
 
         assert result.dtype == pl.Datetime
         # Verify it parsed as dd/mm (EU): 15/01 = Jan 15
+        v = _d(result, 0)
+        assert v.month == 1
+        assert v.day == 15
+
+    def test_eu_slash_date_unpadded(self):
+        # first component > 12 ensures unambiguous EU format; month may omit leading zero
+        s = pl.Series("ts", ["15/1/2024", "20/6/2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
@@ -236,6 +273,18 @@ class TestSlashDates:
 
         assert result.dtype == pl.Datetime
         assert _dt(result, 0).hour == 10
+
+    def test_slash_short_unpadded_ambiguous_infer_format(self):
+        fmts = infer_ts.infer_format(["1/1/26"], exhaustive=True)
+        assert fmts == ["%d/%m/%y", "%m/%d/%y"]
+
+    def test_us_slash_short_datetime_unpadded_without_seconds(self):
+        s = pl.Series("ts", ["1/15/26 10:30", "6/20/26 08:00"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert _dt(result, 0).hour == 10
+        assert _dt(result, 0).second == 0
 
 
 # ─── Compact ──────────────────────────────────────────────────────────────────
@@ -371,6 +420,23 @@ class TestAMPM:
         assert result.dtype == pl.Datetime
         assert _dt(result, 0).hour == 14
 
+    def test_ampm_without_seconds(self):
+        s = pl.Series("ts", ["01/15/2024 2:30 PM", "06/20/2024 8:00 AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        v = _dt(result, 0)
+        assert v.hour == 14
+        assert v.minute == 30
+        assert v.second == 0
+
+    def test_ampm_compact_without_seconds(self):
+        s = pl.Series("ts", ["01/15/2024 2:30PM", "06/20/2024 8:00AM"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert _dt(result, 0).hour == 14
+
     def test_us_slash_ampm_short_year(self):
         s = pl.Series("ts", ["01/15/24 2:30:00 PM", "06/20/24 8:00:00 AM"])
         result = infer_ts.to_datetime(s)
@@ -412,6 +478,13 @@ class TestDotDates:
         v = _d(result, 0)
         assert v.month == 1
         assert v.day == 15
+
+    def test_dot_eu_date_unpadded(self):
+        s = pl.Series("ts", ["15.1.2024", "20.6.2024"])
+        result = infer_ts.to_datetime(s)
+
+        assert result.dtype == pl.Datetime
+        assert _d(result, 0).month == 1
 
     def test_dot_eu_datetime(self):
         s = pl.Series("ts", ["15.01.2024 10:30:00", "20.06.2024 08:00:00"])

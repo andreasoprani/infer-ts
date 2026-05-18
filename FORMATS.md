@@ -23,15 +23,20 @@ Datetime formats are detected **compositionally**: date + separator (`T` or spac
 | Month-name EU, 2-digit year | `15 Jan 24` | `%d %b %y` |
 | RFC 2822 | `Mon, 15 Jan 2024` | `%a, %d %b %Y` |
 
+Numeric days and months may omit leading zeroes (e.g. `1/1/26`, `2024-1-5`).
+
 2-digit years are expanded using the POSIX convention: 00–68 → 2000–2068, 69–99 → 1969–1999.
 
 ## Time patterns
 
 | Name | Example | Polars fragment |
 | ---- | ------- | --------------- |
+| 24-hour, no seconds | `10:30` | `%H:%M` |
 | 24-hour | `10:30:00` | `%H:%M:%S` |
 | 24-hour + fractional seconds | `10:30:00.123456` | `%H:%M:%S%.f` |
 | 24-hour compact | `103000` | `%H%M%S` |
+| 12-hour AM/PM, no seconds | `10:30 PM` | `%I:%M %p` |
+| 12-hour AM/PM compact, no seconds | `10:30PM` | `%I:%M%p` |
 | 12-hour AM/PM | `10:30:00 PM` | `%I:%M:%S %p` |
 | 12-hour AM/PM compact | `10:30:00PM` | `%I:%M:%S%p` |
 
