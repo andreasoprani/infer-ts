@@ -119,9 +119,9 @@ fn to_datetime_impl(
     let parsed = ca.as_datetime(
         Some(&polars_fmt),
         time_unit,
-        true,     // use_cache — key to matching native performance
+        true, // use_cache — key to matching native performance
         tz_aware,
-        None,     // tz
+        None, // tz
         &ambiguous,
     )?;
     Ok(parsed.into_series().with_name(name.clone()))

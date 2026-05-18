@@ -54,9 +54,12 @@ impl DateTimeFormat {
             };
 
             for time_fmt in [
+                TimeFmt::Hm,
                 TimeFmt::Hms,
                 TimeFmt::HmsFrac,
                 TimeFmt::HmsCompact,
+                TimeFmt::Hm12,
+                TimeFmt::Hm12Compact,
                 TimeFmt::Hms12,
                 TimeFmt::Hms12Compact,
             ] {

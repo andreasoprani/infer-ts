@@ -67,18 +67,31 @@ Adding a new format variant (e.g. named timezones) requires a single new enum va
 
 ## Installation
 
-Requires [Rust](https://www.rust-lang.org/) and [maturin](https://github.com/PyO3/maturin).
+Install the Python package with pip:
 
 ```sh
-pip install maturin
-maturin develop --release
+pip install infer-ts
 ```
 
-For development (uses [uv](https://github.com/astral-sh/uv) for reproducible installs):
+Then import it as `infer_ts`:
+
+```python
+import infer_ts
+```
+
+If you are installing from a local checkout instead of PyPI, use:
+
+```sh
+pip install .
+```
+
+## Development
+
+Development requires [Rust](https://www.rust-lang.org/), [maturin](https://github.com/PyO3/maturin), and [uv](https://github.com/astral-sh/uv) for reproducible installs.
 
 ```sh
 uv sync --all-extras
-maturin develop --release
+uv run maturin develop --release
 bash build-and-test.sh
 ```
 

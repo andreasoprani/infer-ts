@@ -70,7 +70,11 @@ fn infer_format_iter(iter: &Bound<'_, PyAny>, exhaustive: bool) -> PyResult<Vec<
 
     for item in iter.try_iter()? {
         let item = item?;
-        let opt_s: Option<String> = if item.is_none() { None } else { Some(item.extract()?) };
+        let opt_s: Option<String> = if item.is_none() {
+            None
+        } else {
+            Some(item.extract()?)
+        };
         match state.feed(opt_s.as_deref()) {
             inference::FeedResult::NoMatch => return Ok(vec![]),
             inference::FeedResult::Done(fmt) => return Ok(vec![fmt.polars_format()]),
@@ -78,7 +82,12 @@ fn infer_format_iter(iter: &Bound<'_, PyAny>, exhaustive: bool) -> PyResult<Vec<
         }
     }
 
-    Ok(state.finish().into_formats().iter().map(|f| f.polars_format()).collect())
+    Ok(state
+        .finish()
+        .into_formats()
+        .iter()
+        .map(|f| f.polars_format())
+        .collect())
 }
 
 #[pymodule]

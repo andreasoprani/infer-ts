@@ -168,8 +168,12 @@ pub fn apply_date_preference(formats: Vec<Format>, prefer_eu: bool) -> Vec<Forma
             Format::Unix(_) => None,
         }
     }
-    fn is_eu(d: DateFmt) -> bool { matches!(d, DateFmt::SlashEU | DateFmt::SlashEUShort) }
-    fn is_us(d: DateFmt) -> bool { matches!(d, DateFmt::SlashUS | DateFmt::SlashUSShort) }
+    fn is_eu(d: DateFmt) -> bool {
+        matches!(d, DateFmt::SlashEU | DateFmt::SlashEUShort)
+    }
+    fn is_us(d: DateFmt) -> bool {
+        matches!(d, DateFmt::SlashUS | DateFmt::SlashUSShort)
+    }
 
     let has_eu = formats.iter().any(|f| slash_date(f).is_some_and(is_eu));
     let has_us = formats.iter().any(|f| slash_date(f).is_some_and(is_us));
@@ -178,11 +182,14 @@ pub fn apply_date_preference(formats: Vec<Format>, prefer_eu: bool) -> Vec<Forma
         return formats;
     }
 
-    formats.into_iter().filter(|f| match slash_date(f) {
-        Some(d) if is_eu(d) => prefer_eu,
-        Some(d) if is_us(d) => !prefer_eu,
-        _ => true,
-    }).collect()
+    formats
+        .into_iter()
+        .filter(|f| match slash_date(f) {
+            Some(d) if is_eu(d) => prefer_eu,
+            Some(d) if is_us(d) => !prefer_eu,
+            _ => true,
+        })
+        .collect()
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -514,13 +521,19 @@ mod tests {
     #[test]
     fn all_nulls_returns_no_data() {
         let input: Vec<Option<&str>> = vec![None, None, None];
-        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoData));
+        assert!(matches!(
+            infer(input.iter().copied(), false),
+            InferResult::NoData
+        ));
     }
 
     #[test]
     fn empty_slice_returns_no_data() {
         let input: Vec<Option<&str>> = vec![];
-        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoData));
+        assert!(matches!(
+            infer(input.iter().copied(), false),
+            InferResult::NoData
+        ));
     }
 
     // ── No-match cases ──────────────────────────────────────────────────────
@@ -528,13 +541,19 @@ mod tests {
     #[test]
     fn incompatible_formats_no_match() {
         let input = vals(&["01/02/2024", "2024-01-15T10:30:00"]);
-        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoMatch));
+        assert!(matches!(
+            infer(input.iter().copied(), false),
+            InferResult::NoMatch
+        ));
     }
 
     #[test]
     fn garbage_no_match() {
         let input = vals(&["not a timestamp at all"]);
-        assert!(matches!(infer(input.iter().copied(), false), InferResult::NoMatch));
+        assert!(matches!(
+            infer(input.iter().copied(), false),
+            InferResult::NoMatch
+        ));
     }
 
     // ── Multiple formats returned (ambiguous cases) ─────────────────────────
@@ -599,7 +618,10 @@ mod tests {
         assert_infer(&input, false, &[dt(Iso, T, Hms, Some(Offset))]);
 
         // Exhaustive processes "GARBAGE" too, which eliminates all candidates.
-        assert!(matches!(infer(input.iter().copied(), true), InferResult::NoMatch));
+        assert!(matches!(
+            infer(input.iter().copied(), true),
+            InferResult::NoMatch
+        ));
     }
 
     #[test]
@@ -621,7 +643,10 @@ mod tests {
     #[test]
     fn exhaustive_empty_column_returns_no_data() {
         let input: Vec<Option<&str>> = vec![None, None];
-        assert!(matches!(infer(input.iter().copied(), true), InferResult::NoData));
+        assert!(matches!(
+            infer(input.iter().copied(), true),
+            InferResult::NoData
+        ));
     }
 
     // ── 12-hour AM/PM inference ──────────────────────────────────────────────
