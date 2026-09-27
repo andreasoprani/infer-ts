@@ -4,11 +4,11 @@
 
 ## API
 
-- [ ] Consider dropping the `pl.col("ts").infer_ts.to_datetime()` expression namespace in favour of the unified `infer_ts.to_datetime(col)` API. The namespace requires manual type-stub configuration (`stubPath`) because `@pl.api.register_expr_namespace` is runtime-only and pyright cannot discover it statically. The function form is equally concise and works out of the box. The main loss would be mid-expression chaining, which is minor. Blocked on: deciding whether polars-ecosystem convention is worth the friction.
+- [ ] Consider dropping the `pl.col("ts").infer_ts.to_datetime()` expression namespace in favour of the unified `infer_ts.to_datetime(col)` API. The namespace requires manual type-stub configuration (`tool.ty.environment.extra-paths`) because `@pl.api.register_expr_namespace` is runtime-only and type checkers cannot discover it statically. The function form is equally concise and works out of the box. The main loss would be mid-expression chaining, which is minor. Blocked on: deciding whether polars-ecosystem convention is worth the friction.
 
 ## Distribution / type checking
 
-- [ ] Expose bundled Polars expr stubs to end users. The wheel already ships `infer_ts/_stubs/polars/expr/expr.pyi` (overrides `Expr.infer_ts`), but there is no `get_stubs_path()` function and no README documentation pointing to it. Users who install from PyPI and use pyright will still hit "Cannot access attribute 'infer_ts' for class 'Expr'". Fix: re-add `get_stubs_path() -> Path` to the public API and document the one-line `pyproject.toml`/`pyrightconfig.json` configuration needed.
+- [ ] Expose bundled Polars expr stubs to end users. The wheel already ships `infer_ts/_stubs/polars/expr/expr.pyi` (overrides `Expr.infer_ts`), but there is no `get_stubs_path()` function and no README documentation pointing to it. Users who install from PyPI will still get type-checking errors for the missing `Expr.infer_ts` attribute. Fix: re-add `get_stubs_path() -> Path` to the public API and document the `pyproject.toml` configuration needed. The current partial stubs also hide other `Expr` members, requiring targeted suppressions in the benchmark tests; investigate a solution that preserves Polars' full typing.
 
 ## Future features
 

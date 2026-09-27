@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     import polars as pl
     from polars._typing import IntoExprColumn
 
-import infer_ts.namespace  # noqa: F401  — registers the expr namespace  # pyright: ignore[reportUnusedImport]
+import infer_ts.namespace  # noqa: F401 - Registers the expr namespace.
 from infer_ts.functions import to_datetime_expr as _to_datetime_expr
 
 

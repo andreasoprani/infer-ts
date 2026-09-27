@@ -150,7 +150,7 @@ class TestLazyFrame:
     def test_map_batches_integration(self, lazy_frame: pl.LazyFrame):
         """map_batches pattern for lazy-compatible usage."""
         result = lazy_frame.with_columns(
-            pl.col("ts").map_batches(infer_ts.to_datetime, return_dtype=pl.Datetime).alias("parsed")  # pyright: ignore[reportAttributeAccessIssue]
+            pl.col("ts").map_batches(infer_ts.to_datetime, return_dtype=pl.Datetime).alias("parsed")  # ty: ignore[unresolved-attribute]
         ).collect()
 
         assert result["parsed"].dtype == pl.Datetime
@@ -194,7 +194,7 @@ class TestPluginVsNativePolars:
         """Plugin produces byte-identical Datetime(us) values to native Polars."""
         n = 10_000
         df = pl.DataFrame({"ts": [sample] * n})
-        native = df.with_columns(pl.col("ts").str.to_datetime(format=polars_fmt))["ts"]  # pyright: ignore[reportAttributeAccessIssue]
+        native = df.with_columns(pl.col("ts").str.to_datetime(format=polars_fmt))["ts"]  # ty: ignore[unresolved-attribute]
         plugin = df.with_columns(pl.col("ts").infer_ts.to_datetime())["ts"]
         assert native.dtype == plugin.dtype == pl.Datetime
         assert (native == plugin).all(), (
@@ -217,7 +217,7 @@ class TestPluginVsNativePolars:
         """
         t_native, _ = _time(
             lambda: large_iso_df.with_columns(
-                pl.col("ts").str.to_datetime(format="%Y-%m-%dT%H:%M:%S")  # pyright: ignore[reportAttributeAccessIssue]
+                pl.col("ts").str.to_datetime(format="%Y-%m-%dT%H:%M:%S")  # ty: ignore[unresolved-attribute]
             )
         )
         t_plugin, _ = _time(lambda: large_iso_df.with_columns(pl.col("ts").infer_ts.to_datetime()))

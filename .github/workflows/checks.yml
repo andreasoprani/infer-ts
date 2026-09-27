@@ -25,8 +25,8 @@ jobs:
       - name: Ruff lint
         run: uv run ruff check python/
 
-      - name: Pyright
-        run: uv run basedpyright
+      - name: ty
+        run: uv run ty check
 
   test:
     name: Build & test

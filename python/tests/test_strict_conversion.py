@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict
 
 if TYPE_CHECKING:
-    from typing import Unpack
+    from typing_extensions import Unpack
 
 import polars as pl
 import pytest
@@ -138,7 +138,7 @@ def test_multichunk_missing_values_and_failure(convert: Converter) -> None:
 def test_conversion_no_longer_accepts_exhaustive(convert: Converter) -> None:
     with pytest.raises(TypeError, match="exhaustive"):
         # Deliberately pass the removed keyword to verify runtime rejection.
-        convert(["2026-01-13T00:00:00"], exhaustive=True)  # pyright: ignore[reportCallIssue]
+        convert(["2026-01-13T00:00:00"], exhaustive=True)
 
 
 def test_infer_format_keeps_exhaustive() -> None:

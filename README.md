@@ -217,4 +217,19 @@ print(fmts)  # []
 
 ## Contributing
 
+Install the development dependencies and run the checks (requires Rust and uv):
+
+```sh
+uv sync --locked
+uv run ty check
+uv run ruff check python/
+uv run ruff format --check python/
+uv run pytest python/tests/ -m "not slow"
+cargo test
+```
+
+Type checking uses ty, targeting the minimum supported Python version (3.10).
+The `typings/` directory provides local stubs for the dynamically registered
+Polars expression namespace.
+
 This project was developed with heavy use of LLM agents (primarily Claude) for both the initial implementation and subsequent refinement. If you spot a bug, an edge case the parser mishandles, or a timestamp format that should be supported, issues and pull requests are very welcome.

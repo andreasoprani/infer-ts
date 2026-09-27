@@ -137,7 +137,7 @@ class TestTimeUnit:
     def test_invalid_time_unit(self):
         df = pl.DataFrame({"ts": ["2024-01-15T10:30:00"]})
         with pytest.raises(ValueError, match="time_unit must be"):
-            df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="s"))  # pyright: ignore[reportArgumentType]
+            df.with_columns(pl.col("ts").infer_ts.to_datetime(time_unit="s"))  # ty: ignore[invalid-argument-type]
 
     def test_unix_seconds_ms(self):
         df = pl.DataFrame({"ts": ["1705312200", "1705398600"]})
