@@ -16,7 +16,7 @@ def infer_format(
 def to_datetime(
     values: pl.Series,
     *,
-    exhaustive: bool = ...,
+    strict: bool = True,
     raise_on_multiple: bool = ...,
     time_unit: Literal["ns", "us", "ms"] = ...,
     date_preference: Literal["eu", "us"] = ...,
@@ -25,7 +25,7 @@ def to_datetime(
 def to_datetime(
     values: pl.Expr | str,
     *,
-    exhaustive: bool = ...,
+    strict: bool = True,
     raise_on_multiple: bool = ...,
     time_unit: Literal["ns", "us", "ms"] = ...,
     date_preference: Literal["eu", "us"] = ...,
@@ -33,7 +33,7 @@ def to_datetime(
 def to_datetime(
     values: pl.Series | pl.Expr | str,
     *,
-    exhaustive: bool = ...,
+    strict: bool = True,
     raise_on_multiple: bool = ...,
     time_unit: Literal["ns", "us", "ms"] = ...,
     date_preference: Literal["eu", "us"] = ...,
@@ -44,7 +44,7 @@ class ExprInferTsNamespace:
     def to_datetime(
         self,
         *,
-        exhaustive: bool = ...,
+        strict: bool = True,
         raise_on_multiple: bool = ...,
         time_unit: Literal["ns", "us", "ms"] = ...,
         date_preference: Literal["eu", "us"] = ...,

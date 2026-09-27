@@ -22,7 +22,7 @@ from infer_ts.functions import to_datetime_expr as _to_datetime_expr
 
 
 class _KwArgs(TypedDict):
-    exhaustive: bool
+    strict: bool
     raise_on_multiple: bool
     time_unit: Literal["ns", "us", "ms"]
     date_preference: Literal["eu", "us"]
@@ -56,7 +56,7 @@ def infer_format(
 def to_datetime(
     values: IntoExprColumn,
     *,
-    exhaustive: bool = False,
+    strict: bool = True,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
     date_preference: Literal["eu", "us"] = "eu",
@@ -70,7 +70,11 @@ def to_datetime(
 
     Args:
         values: A Polars Series, expression, or column name string.
-        exhaustive: If *True*, check all values during inference.
+        strict: If *True* (default), raise when conversion fails for a non-null,
+            non-blank value, including Unix scaling overflow. If *False*, failed
+            conversions become null. Nulls and whitespace-only strings are always
+            accepted as missing values. Inference uses early exit in both modes;
+            failure to infer a format still raises even with ``strict=False``.
         raise_on_multiple: If *True* (default), raise an error when multiple
             formats match.  If *False*, use the first match.
         time_unit: Output datetime time unit — ``"ns"``, ``"us"``, or ``"ms"``.
@@ -87,13 +91,13 @@ def to_datetime(
         *values* is a Series; a :class:`~polars.Expr` otherwise.
 
     Raises:
-        polars.exceptions.ComputeError: No format matches, or (if *raise_on_multiple*)
-            multiple formats match.
+        polars.exceptions.ComputeError: No format matches, (if *raise_on_multiple*)
+            multiple formats match, or (if *strict*) conversion fails.
     """
     import polars as pl
 
     kw: _KwArgs = {
-        "exhaustive": exhaustive,
+        "strict": strict,
         "raise_on_multiple": raise_on_multiple,
         "time_unit": time_unit,
         "date_preference": date_preference,

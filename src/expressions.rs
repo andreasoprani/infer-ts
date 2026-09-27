@@ -15,7 +15,7 @@ use crate::inference;
 
 #[derive(Deserialize)]
 struct ToDatetimeKwargs {
-    exhaustive: bool,
+    strict: bool,
     raise_on_multiple: bool,
     date_preference: String,
 }
@@ -69,7 +69,9 @@ fn to_datetime_impl(
     let ca = series.str()?;
     let name = series.name();
 
-    let formats = match inference::infer(ca, kwargs.exhaustive) {
+    // Conversion always uses early-exit inference. Strictness is checked on
+    // the conversion result, not by parsing the input a second time.
+    let formats = match inference::infer(ca, false) {
         inference::InferResult::NoData => {
             // All values are null — return a null Datetime series.
             return Series::new_null(name.clone(), ca.len())
@@ -101,7 +103,11 @@ fn to_datetime_impl(
     let fmt = formats[0];
 
     if let Format::Unix(uf) = fmt {
-        return unix_to_datetime(ca, uf.precision, time_unit, name);
+        let parsed = unix_to_datetime(ca, uf.precision, time_unit, name)?;
+        if kwargs.strict {
+            check_conversion(ca, parsed.datetime()?, &fmt)?;
+        }
+        return Ok(parsed);
     }
 
     let polars_fmt = fmt.polars_format();
@@ -124,7 +130,40 @@ fn to_datetime_impl(
         None, // tz
         &ambiguous,
     )?;
+    if kwargs.strict {
+        check_conversion(ca, &parsed, &fmt)?;
+    }
     Ok(parsed.into_series().with_name(name.clone()))
+}
+
+/// Conversion preserves existing nulls. Only inspect values if new nulls
+/// appeared, and allow blank strings (the same missing-data policy as inference).
+/// Clean columns take the cheap null-count path without an additional value scan.
+fn check_conversion(
+    input: &StringChunked,
+    output: &DatetimeChunked,
+    format: &Format,
+) -> PolarsResult<()> {
+    if input.null_count() == output.null_count() {
+        return Ok(());
+    }
+
+    for (index, (value, parsed)) in input
+        .into_iter()
+        .zip(output.physical().into_iter())
+        .enumerate()
+    {
+        if parsed.is_none() {
+            if let Some(value) = value.filter(|v| !v.trim().is_empty()) {
+                polars_bail!(ComputeError:
+                    "conversion failed at row {} for value {:?} using inferred format {:?}. \
+                     Pass strict=False to return null for failed conversions.",
+                    index, value, format.polars_format()
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

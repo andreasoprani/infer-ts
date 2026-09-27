@@ -24,7 +24,7 @@ __all__: list[str] = []
 def to_datetime_expr(
     expr: pl.Expr,
     *,
-    exhaustive: bool = False,
+    strict: bool = True,
     raise_on_multiple: bool = True,
     time_unit: Literal["ns", "us", "ms"] = "us",
     date_preference: Literal["eu", "us"] = "eu",
@@ -35,7 +35,10 @@ def to_datetime_expr(
 
     Args:
         expr: A Polars expression producing a String column.
-        exhaustive: If *True*, check all values during inference.
+        strict: If *True* (default), raise on failed conversions of non-null,
+            non-blank values. If *False*, return null for failed conversions.
+            Nulls and whitespace-only strings are accepted in either mode.
+            Inference always uses early exit and can still fail in either mode.
         raise_on_multiple: If *True* (default), error when multiple formats
             match.  If *False*, use the first match.
         time_unit: Output datetime time unit. One of ``"ns"``, ``"us"``,
@@ -58,7 +61,7 @@ def to_datetime_expr(
         args=[expr],
         is_elementwise=False,
         kwargs={
-            "exhaustive": exhaustive,
+            "strict": strict,
             "raise_on_multiple": raise_on_multiple,
             "date_preference": date_preference,
         },

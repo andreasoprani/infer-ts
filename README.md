@@ -37,10 +37,10 @@ The inference engine treats each candidate timestamp format as a variable in a C
 
 1. **Initialise** – start with all format combinations as candidates.
 2. **Propagate** – for each non-null cell, eliminate every format that cannot parse that value.
-3. **Early exit** (default) – as soon as a single format remains, return it immediately. Set `exhaustive=True` to disable this and check all values.
+3. **Early exit** (default) – as soon as a single format remains, return it immediately. For `infer_format`, set `exhaustive=True` to disable this. Conversion always uses early-exit inference.
 4. **Return** – return all formats that survived constraint propagation.
 
-This approach is both efficient (resolves in the first few rows for most real data) and flexible (use `exhaustive=True` to validate the _entire_ column).
+Inference can stop once the format is unambiguous. Use `infer_format(..., exhaustive=True)` to validate format consistency across the input. `to_datetime` instead uses `strict=True` by default to reject failed conversions, without an exhaustive inference pass.
 
 ## Supported formats
 
@@ -123,6 +123,27 @@ df = df.with_columns(infer_ts.to_datetime("ts", time_unit="ns"))
 # Infer the format strings only (returns a list of all matching formats)
 fmts = infer_ts.infer_format(df["ts"])
 ```
+
+### Strict conversion and missing values
+
+`to_datetime` accepts `strict=True` (the default), not `exhaustive`. This applies
+identically to Series, column names, expressions, and the expression namespace.
+
+```python
+s = pl.Series("ts", ["01/13/2026 00:00:00", "invalid"])
+
+infer_ts.to_datetime(s)
+# raises ComputeError: conversion failed ...
+
+infer_ts.to_datetime(s, strict=False)
+# [2026-01-13 00:00:00, null]
+```
+
+- Nulls, empty strings, and whitespace-only strings are treated as missing values in both modes. All-missing inputs produce an all-null Datetime Series.
+- Strict conversion rejects failed non-blank conversions, including Unix integer parsing and scaling overflow. Non-strict conversion returns nulls for them.
+- Inference always uses early exit. `strict=False` does **not** make inference tolerant of arbitrary garbage: if no format can be inferred (for example, the first non-blank value is invalid), conversion still raises.
+- Ambiguity is independent of strictness: `raise_on_multiple=True` still raises when multiple formats survive. Use `raise_on_multiple=False` and, optionally, `date_preference="eu"` or `"us"` to choose an interpretation.
+- On clean data, strict conversion checks only null counts. If conversion creates new nulls, it inspects the input/output to distinguish blank strings from errors; it does not parse the timestamps again.
 
 ### Basic inference
 
