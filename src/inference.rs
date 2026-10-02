@@ -719,6 +719,26 @@ mod tests {
         assert_infer(&input, false, &[dt(Iso, Space, Hms12Compact, None)]);
     }
 
+    #[test]
+    fn infer_hour_only_offsets() {
+        let input = vals(&["2024-01-15T10:30:00+00", "2024-06-20T08:00:00-08"]);
+        for exhaustive in [false, true] {
+            assert_infer(&input, exhaustive, &[dt(Iso, T, Hms, Some(OffsetHour))]);
+            assert_infer(
+                &vals(&["2024-01-15 10:30:00 +05", "2024-06-20 08:00:00 -08"]),
+                exhaustive,
+                &[dt_spaced_tz(Iso, Space, Hms, OffsetHour)],
+            );
+        }
+        for suffix in ["+0000", "+00:00", "Z", "+24"] {
+            let other = format!("2024-06-20T08:00:00{suffix}");
+            assert!(matches!(
+                infer(vals(&["2024-01-15T10:30:00+00", &other]), true),
+                InferResult::NoMatch
+            ));
+        }
+    }
+
     // ── Spaced timezone inference ───────────────────────────────────────────
 
     #[test]

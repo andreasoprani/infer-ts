@@ -11,6 +11,8 @@ Coverage (per TODO v0.1):
 - Unix epoch (seconds, ms, µs, ns)
 """
 
+from datetime import datetime, timedelta, timezone
+
 import polars as pl
 import pytest
 
@@ -971,7 +973,57 @@ class TestSpacedTimezone:
 
 
 class TestTimezoneHandling:
-    """Regression tests for tz-offset inputs (bug: tz was silently dropped)."""
+    """Timezone offset inference and UTC conversion, including hour-only offsets."""
+
+    @pytest.mark.parametrize("separator", ["T", " "])
+    @pytest.mark.parametrize("tz_space", ["", " "])
+    @pytest.mark.parametrize(
+        ("time", "fragment", "microsecond"),
+        [
+            ("10:30", "%H:%M", 0),
+            ("10:30:00", "%H:%M:%S", 0),
+            ("10:30:00.123456", "%H:%M:%S%.f", 123456),
+            ("103000", "%H%M%S", 0),
+            ("10:30:00 AM", "%I:%M:%S %p", 0),
+        ],
+    )
+    @pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
+    def test_hour_only_offsets(self, separator, tz_space, time, fragment, microsecond, time_unit):
+        offsets = ["+00", "-00", "+05", "-08", "+23", "-23"]
+        values = [f"2024-01-15{separator}{time}{tz_space}{offset}" for offset in offsets]
+        series = pl.Series("ts", [None, *values])
+        fmt = f"%Y-%m-%d{separator}{fragment}{tz_space}%#z"
+
+        for inputs in [values, series, iter(values)]:
+            assert infer_ts.infer_format(inputs, exhaustive=True) == [fmt]
+
+        # Verify the inferred format works with native Polars too.
+        native = series.str.to_datetime(format=fmt, time_unit=time_unit)
+        result = infer_ts.to_datetime(series, time_unit=time_unit)
+        expr_result = (
+            series.to_frame()
+            .lazy()
+            .select(infer_ts.to_datetime("ts", time_unit=time_unit))
+            .collect()
+            .to_series()
+        )
+        assert result.dtype == pl.Datetime(time_unit, "UTC")
+        assert result.equals(native)
+        assert result.equals(expr_result)
+
+        precision = microsecond // 1000 * 1000 if time_unit == "ms" else microsecond
+        wall_clock = datetime(2024, 1, 15, 10, 30, microsecond=precision, tzinfo=timezone.utc)
+        expected = [None, *(wall_clock - timedelta(hours=int(offset)) for offset in offsets)]
+        assert result.to_list() == expected
+
+    @pytest.mark.parametrize("suffix", ["+0000", "+00:00", "Z", "+24", "-24", "+5", "+005"])
+    def test_hour_only_exhaustive_inference_rejects_other_formats(self, suffix):
+        values = ["2024-01-15T10:30:00+00", f"2024-01-15T10:30:00{suffix}"]
+        assert infer_ts.infer_format(values, exhaustive=True) == []
+
+    @pytest.mark.parametrize("suffix", ["+24", "-24", "+5", "+005", "+05:", "+0x", "+é"])
+    def test_invalid_hour_only_offsets(self, suffix):
+        assert infer_ts.infer_format([f"2024-01-15T10:30:00{suffix}"]) == []
 
     def test_offset_series_dtype_is_utc(self):
         """Series path: tz-offset input → datetime[μs, UTC]."""

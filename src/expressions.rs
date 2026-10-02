@@ -113,13 +113,14 @@ fn to_datetime_impl(
     let polars_fmt = fmt.polars_format();
     let ambiguous = StringChunked::from_slice(PlSmallStr::from_static("ambiguous"), &["raise"]);
 
-    // Numeric offset timezones (+HH:MM, ±HHMM) need tz_aware=true so polars
+    // Numeric offset timezones (±HH:MM, ±HHMM, ±HH) need tz_aware=true so polars
     // converts the offset to UTC.  The literal-Z suffix is already UTC so it
     // parses correctly without tz_aware.
     let tz_aware = matches!(
         fmt,
         Format::DateTime(dtf)
-            if matches!(dtf.time.timezone, Some(Timezone::Offset) | Some(Timezone::OffsetCompact))
+            if matches!(dtf.time.timezone,
+                Some(Timezone::Offset | Timezone::OffsetCompact | Timezone::OffsetHour))
     );
 
     let parsed = ca.as_datetime(

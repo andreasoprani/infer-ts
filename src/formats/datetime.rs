@@ -82,7 +82,12 @@ impl DateTimeFormat {
                 }
 
                 // Try each timezone variant, with and without space before tz
-                for tz in [Timezone::Utc, Timezone::Offset, Timezone::OffsetCompact] {
+                for tz in [
+                    Timezone::Utc,
+                    Timezone::Offset,
+                    Timezone::OffsetCompact,
+                    Timezone::OffsetHour,
+                ] {
                     for spaced in [false, true] {
                         let tz_input = if spaced {
                             if after_time.is_empty() || after_time.as_bytes()[0] != b' ' {

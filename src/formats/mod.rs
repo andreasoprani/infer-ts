@@ -228,6 +228,34 @@ mod tests {
     }
 
     #[test]
+    fn hour_only_offsets() {
+        let fmt = dt(Iso, T, Hms, Some(OffsetHour));
+        assert_eq!(fmt.polars_format(), "%Y-%m-%dT%H:%M:%S%#z");
+        for offset in ["+00", "-00", "+05", "-08", "+23", "-23"] {
+            let value = format!("2024-01-15T10:30:00{offset}");
+            assert_only(&value, fmt);
+            assert!(fmt.validates(&value));
+        }
+        assert_only(
+            "2024-01-15T10:30:00.123+05",
+            dt(Iso, T, HmsFrac, Some(OffsetHour)),
+        );
+        assert_only("2024-01-15T10:30-08", dt(Iso, T, Hm, Some(OffsetHour)));
+        assert_only(
+            "2024-01-15 10:30:00 +00",
+            dt_spaced_tz(Iso, Space, Hms, OffsetHour),
+        );
+        for value in [
+            "2024-01-15T10:30:00+05:00",
+            "2024-01-15T10:30:00+0500",
+            "2024-01-15T10:30:00Z",
+            "2024-01-15T10:30:00+24",
+        ] {
+            assert!(!fmt.validates(value));
+        }
+    }
+
+    #[test]
     fn iso8601_negative_offset() {
         assert_only("2024-01-15T10:30:00-08:00", dt(Iso, T, Hms, Some(Offset)));
     }
@@ -1115,14 +1143,20 @@ mod tests {
     #[test]
     fn partial_timezone_rejected() {
         assert_none("2024-01-15T10:30:00+0");
-        assert_none("2024-01-15T10:30:00+05");
         assert_none("2024-01-15T10:30:00+5:30");
+        for offset in [
+            "+", "+5", "+005", "+05:", "+05:0", "+05Z", "+0x", "++5", "+é",
+        ] {
+            assert_none(&format!("2024-01-15T10:30:00{offset}"));
+        }
     }
 
     #[test]
     fn invalid_timezone_values_rejected() {
         assert_none("2024-01-15T10:30:00+24:00");
         assert_none("2024-01-15T10:30:00+05:60");
+        assert_none("2024-01-15T10:30:00+24");
+        assert_none("2024-01-15T10:30:00-24");
     }
 
     #[test]
@@ -1257,7 +1291,8 @@ mod tests {
             ));
         }
         out.push_str(
-            "\nA space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).\n\n",
+            "\nA space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).\n\n\
+             Hour-only offsets (`±HH`) imply zero minutes. Their Polars fragment, `%#z`, is a permissive parsing-only directive; inference still distinguishes hour-only, compact, and colon offsets.\n\n",
         );
 
         // ── Unix epoch formats ───────────────────────────────────────────────

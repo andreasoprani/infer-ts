@@ -49,8 +49,11 @@ Date and time are joined by `T` (ISO 8601 style) or a single space.
 | UTC | `Z` | `Z` |
 | Offset with colon | `+05:30` | `%:z` |
 | Compact offset | `+0530` | `%z` |
+| Hour-only offset | `+05` | `%#z` |
 
 A space before the timezone suffix is also accepted (e.g. `10:30:00 +05:30`).
+
+Hour-only offsets (`±HH`) imply zero minutes. Their Polars fragment, `%#z`, is a permissive parsing-only directive; inference still distinguishes hour-only, compact, and colon offsets.
 
 ## Unix epoch formats
 
